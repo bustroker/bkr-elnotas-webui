@@ -18,77 +18,11 @@ corepack enable
 pnpm --version
 ```
 
-## Local Configuration
+## Configuration
 
-```sh
-cp config/app.example.json config/app.json
-cp .env.example .env
-```
+Configure the app before running it:
 
-Edit `config/app.json`:
-
-```json
-{
-  "notesGitHubRepository": {
-    "account": "your-notes-github-account-or-org",
-    "repo": "elnotas-notes",
-    "branch": "main"
-  },
-  "notesFolder": "notes",
-  "trashFolder": "trash",
-  "trashSizeLimit": 10,
-  "localWorkingCopyFolder": "./data/working-copy",
-  "allowedGitHubUsernames": ["your-github-username"]
-}
-```
-
-`notesGitHubRepository.account` is the GitHub user or organization that owns the notes repository. `allowedGitHubUsernames` is the login whitelist for people who may use this web app.
-
-The notes repository must contain root-level folders matching the config:
-
-```text
-notes/
-trash/
-```
-
-## Create The GitHub App
-
-```text
-GitHub -> Settings -> Developer settings -> GitHub Apps -> New GitHub App
-```
-
-Use these local values:
-
-- GitHub App name: `5l-elnotas-webui-local`
-- Homepage URL: `http://localhost:3000`
-- Callback URL: `http://localhost:3000/auth/github/callback`
-- Webhook: inactive
-- Repository permissions:
-  - Contents: Read and write
-  - Metadata: Read-only
-- Account permissions: none
-- Installation target: only this account
-
-After creating the app:
-
-1. Copy the App ID into `GITHUB_APP_ID`.
-2. Copy the Client ID into `GITHUB_APP_CLIENT_ID`.
-3. Generate a Client Secret and put it in `GITHUB_APP_CLIENT_SECRET`.
-4. Generate a private key.
-5. Put the private key in `GITHUB_APP_PRIVATE_KEY`.
-6. Install the GitHub App on the notes repository from `config/app.json`.
-
-Use escaped newlines for the private key in `.env`:
-
-```env
-GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
-```
-
-Set a long random session secret:
-
-```env
-SESSION_SECRET=replace-with-a-long-random-value
-```
+[README.config.md](README.config.md)
 
 ## Run With Docker Compose
 
@@ -156,24 +90,6 @@ dist/client/sw.js
 The service worker caches only the app shell and static assets. API routes and auth routes are network-only; note content is not stored in Cache Storage.
 
 Check installability in a production build through the browser application panel or mobile install prompt.
-
-## Runtime Files
-
-Ignored local files:
-
-```text
-.env
-config/app.json
-data/
-dist/
-node_modules/
-```
-
-`config/app.json` contains non-secret runtime configuration.
-
-`.env` contains secrets and must not be committed.
-
-`data/working-copy` stores the local markdown working copy.
 
 ## Notes Behavior
 
