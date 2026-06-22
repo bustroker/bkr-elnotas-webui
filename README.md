@@ -1,104 +1,26 @@
 # 5l-elnotas-webui
 
-React + Node.js web app for markdown notes stored in a GitHub repository.
+Private GitHub-backed markdown notes, editable from a browser.
 
-The backend serves the frontend, authenticates users with GitHub, checks a username whitelist, reads/writes notes through a GitHub App, and keeps a local filesystem working copy for fast browsing and filtering.
+`5l-elnotas-webui` is a single web app that turns a GitHub repository into a lightweight notes UI. It authenticates users with GitHub, reads and writes plain markdown files through a GitHub App, keeps a local working copy for fast browsing, and provides card-based search, tags, pinning, editing, conflict handling, and trash.
 
-## Requirements
+It is useful when notes must remain portable, agent-friendly, and independently accessible as markdown files, while still offering a comfortable authenticated web interface.
 
-```sh
-docker --version
-docker compose version
-```
+## Main Features
 
-Optional local Node runtime:
+- One markdown file per note.
+- GitHub repository as source of truth.
+- GitHub login with username whitelist.
+- GitHub App read/write access to the notes repository.
+- Local working copy for fast listing and filtering.
+- Cards sorted by conflict, pinned, then last update.
+- Tag and full-content text filters.
+- Raw markdown editing in a modal.
+- Pin/unpin, trash, empty trash, and permanent delete.
+- Conflict copies instead of overwriting stale edits.
+- Progressive Web App using `vite-plugin-pwa`.
 
-```sh
-corepack enable
-pnpm --version
-```
+## Docs
 
-## Configuration
-
-Configure the app before running it:
-
-[README.config.md](README.config.md)
-
-## Run With Docker Compose
-
-```sh
-docker compose up --build
-```
-
-Open:
-
-```text
-http://localhost:3000
-```
-
-Health check:
-
-```sh
-curl http://localhost:3000/api/health
-```
-
-## Run Without Docker
-
-```sh
-corepack enable
-pnpm install
-pnpm build
-pnpm start
-```
-
-Open:
-
-```text
-http://localhost:3000
-```
-
-## Development
-
-```sh
-corepack enable
-pnpm install
-pnpm dev
-```
-
-`pnpm dev` builds the frontend once and starts the backend in watch mode.
-
-## Validation
-
-```sh
-pnpm typecheck
-pnpm test
-pnpm build
-docker compose config
-```
-
-## PWA
-
-The app uses `vite-plugin-pwa`.
-
-Production builds generate:
-
-```text
-dist/client/manifest.webmanifest
-dist/client/sw.js
-```
-
-The service worker caches only the app shell and static assets. API routes and auth routes are network-only; note content is not stored in Cache Storage.
-
-Check installability in a production build through the browser application panel or mobile install prompt.
-
-## Notes Behavior
-
-- Active notes are markdown files under `notes/`.
-- Trash notes are markdown files under `trash/`.
-- The app loads active notes into a local working copy.
-- The user can explicitly reload active notes from GitHub.
-- Entering edit mode reloads the note from GitHub and captures its file SHA.
-- Saving commits immediately to GitHub.
-- Conflicts create a `*-conflict-YYYYMMDD-HHMMSS.md` copy and mark both notes with `conflict: true`.
-- Sending a note to trash moves the file into `trash/`.
-- If trash already has the configured maximum number of notes, the oldest trash file is permanently deleted when a new note is sent to trash.
+- [Configuration](README.config.md)
+- [Run, test, and tech stack](README.run.md)
