@@ -1,0 +1,18 @@
+services:
+  webui:
+    build:
+      context: .
+    ports:
+      - "3000:3000"
+    environment:
+      CONFIG_FILE: /app/config/app.json
+      NODE_ENV: production
+      PORT: "3000"
+      GITHUB_APP_ID: ${GITHUB_APP_ID:-}
+      GITHUB_APP_CLIENT_ID: ${GITHUB_APP_CLIENT_ID:-}
+      GITHUB_APP_CLIENT_SECRET: ${GITHUB_APP_CLIENT_SECRET:-}
+      GITHUB_APP_PRIVATE_KEY: ${GITHUB_APP_PRIVATE_KEY:-}
+      SESSION_SECRET: ${SESSION_SECRET:-}
+    volumes:
+      - ./config/app.json:/app/config/app.json:ro
+      - ./data/working-copy:/app/data/working-copy
