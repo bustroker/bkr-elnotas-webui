@@ -1,22 +1,16 @@
 # 5l-elnotas-webui
 
-Private markdown notes synced with GitHub, editable from a browser.
-
-`5l-elnotas-webui` is a private notes web app where every note is stored as one plain markdown file in a GitHub repository. It gives you a browser UI for reading, searching, filtering, editing, pinning, and deleting notes while keeping the underlying notes portable and easy to access outside the app.
-
-It is useful when notes must stay independent from any database or proprietary app format, but still need a comfortable authenticated web interface.
+`5l-elnotas-webui` is a personal notes web app you can use in the browser or install on your phone, with every note saved as Markdown in a GitHub repo. It provides a private interface for reading, searching, and editing notes while keeping them portable and versioned. It is also agent-friendly: agents can manage the same notes directly through the backing GitHub repo.
 
 ## Main Features
 
-- Notes synced with a GitHub repository.
-- One markdown file per note.
-- GitHub login with username whitelist; only predefined GitHub users can log in.
-- Cards sorted by conflict, pinned, then last update.
-- Tag and full-content text filters.
-- Raw markdown editing in a modal.
-- Pin/unpin, trash, empty trash, and permanent delete.
-- Conflict copies instead of overwriting stale edits.
-- Progressive Web App using `vite-plugin-pwa`.
+- Notes stay synced with a GitHub repository.
+- Each note is a plain Markdown file.
+- Browse notes as cards for quick scanning.
+- Private access through GitHub login and a username whitelist.
+- Search by tag or across the full note content.
+- Edit notes directly as raw Markdown.
+- Installable from the browser for app-like mobile access.
 
 ## How It Works
 
