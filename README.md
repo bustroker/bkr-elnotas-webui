@@ -1,10 +1,24 @@
 # 5l-elnotas-webui
 
-Web UI for markdown notes stored in a GitHub repository.
+React + Node.js web app for markdown notes stored in a GitHub repository.
 
-The app runs as one Node.js web application: the backend serves the React frontend and exposes the API used by the UI. Notes are stored as markdown files in GitHub. The backend keeps a local filesystem working copy for fast browsing and filtering.
+The backend serves the frontend, authenticates users with GitHub, checks a username whitelist, reads/writes notes through a GitHub App, and keeps a local filesystem working copy for fast browsing and filtering.
 
-## Local Setup
+## Requirements
+
+```sh
+docker --version
+docker compose version
+```
+
+Optional local Node runtime:
+
+```sh
+corepack enable
+pnpm --version
+```
+
+## Local Configuration
 
 ```sh
 cp config/app.example.json config/app.json
@@ -28,27 +42,30 @@ Edit `config/app.json`:
 }
 ```
 
-Edit `.env` with the GitHub App values described below.
+The notes repository must contain root-level folders matching the config:
+
+```text
+notes/
+trash/
+```
 
 ## Create The GitHub App
-
-Open GitHub developer settings:
 
 ```text
 GitHub -> Settings -> Developer settings -> GitHub Apps -> New GitHub App
 ```
 
-Use these values for local development:
+Use these local values:
 
-- GitHub App name: `5l-elnotas-webui-local` or another unique name.
+- GitHub App name: `5l-elnotas-webui-local`
 - Homepage URL: `http://localhost:3000`
 - Callback URL: `http://localhost:3000/auth/github/callback`
-- Webhook: inactive for now.
+- Webhook: inactive
 - Repository permissions:
   - Contents: Read and write
   - Metadata: Read-only
-- Account permissions: none.
-- Where can this GitHub App be installed: only on this account.
+- Account permissions: none
+- Installation target: only this account
 
 After creating the app:
 
@@ -57,9 +74,9 @@ After creating the app:
 3. Generate a Client Secret and put it in `GITHUB_APP_CLIENT_SECRET`.
 4. Generate a private key.
 5. Put the private key in `GITHUB_APP_PRIVATE_KEY`.
-6. Install the GitHub App on the notes repository configured in `config/app.json`.
+6. Install the GitHub App on the notes repository from `config/app.json`.
 
-For `.env`, use escaped newlines in the private key:
+Use escaped newlines for the private key in `.env`:
 
 ```env
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
@@ -112,47 +129,58 @@ pnpm install
 pnpm dev
 ```
 
-The `pnpm dev` command builds the React frontend once and starts the backend in watch mode.
+`pnpm dev` builds the frontend once and starts the backend in watch mode.
 
-## Required Files
+## Validation
 
-```text
-config/app.json
-.env
+```sh
+pnpm typecheck
+pnpm test
+pnpm build
+docker compose config
 ```
 
-`config/app.json` contains non-secret application configuration.
+## PWA
+
+The app uses `vite-plugin-pwa`.
+
+Production builds generate:
+
+```text
+dist/client/manifest.webmanifest
+dist/client/sw.js
+```
+
+The service worker caches only the app shell and static assets. API routes and auth routes are network-only; note content is not stored in Cache Storage.
+
+Check installability in a production build through the browser application panel or mobile install prompt.
+
+## Runtime Files
+
+Ignored local files:
+
+```text
+.env
+config/app.json
+data/
+dist/
+node_modules/
+```
+
+`config/app.json` contains non-secret runtime configuration.
 
 `.env` contains secrets and must not be committed.
 
-## Runtime Configuration
+`data/working-copy` stores the local markdown working copy.
 
-`CONFIG_FILE` points to the JSON config file.
+## Notes Behavior
 
-```env
-CONFIG_FILE=./config/app.json
-```
-
-The app expects these secret environment variables:
-
-```env
-GITHUB_APP_ID=
-GITHUB_APP_CLIENT_ID=
-GITHUB_APP_CLIENT_SECRET=
-GITHUB_APP_PRIVATE_KEY=
-SESSION_SECRET=
-```
-
-## Current Scaffold
-
-The current implementation includes:
-
-- React frontend shell.
-- Node.js/TypeScript backend shell.
-- JSON config validation.
-- `.env` loading for local development.
-- `/api/health`.
-- Dockerfile.
-- `docker-compose.yml`.
-
-GitHub auth, notes CRUD, working copy sync, conflict handling, and trash behavior are planned next.
+- Active notes are markdown files under `notes/`.
+- Trash notes are markdown files under `trash/`.
+- The app loads active notes into a local working copy.
+- The user can explicitly reload active notes from GitHub.
+- Entering edit mode reloads the note from GitHub and captures its file SHA.
+- Saving commits immediately to GitHub.
+- Conflicts create a `*-conflict-YYYYMMDD-HHMMSS.md` copy and mark both notes with `conflict: true`.
+- Sending a note to trash moves the file into `trash/`.
+- If trash already has the configured maximum number of notes, the oldest trash file is permanently deleted when a new note is sent to trash.

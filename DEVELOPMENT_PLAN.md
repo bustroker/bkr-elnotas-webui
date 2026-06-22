@@ -3,9 +3,11 @@
 ## 1. Project Foundation
 
 - Create the React frontend and Node.js/TypeScript backend in one deployable app.
+- Use Fastify for backend routing, cookies, static assets, and structured API errors.
 - Add strict TypeScript configuration.
 - Add JSON configuration loading and environment-based secret loading.
 - Add Docker and Docker Compose local execution.
+- Add PWA support with `vite-plugin-pwa`.
 
 ## 2. Markdown Note Model
 
@@ -50,7 +52,14 @@
 - Switch the modal to raw markdown edit mode.
 - Add trash access and empty trash flows.
 
-## 8. Verification
+## 8. PWA
+
+- Generate manifest and service worker through `vite-plugin-pwa`.
+- Cache only app shell and static assets.
+- Keep `/api/*`, `/auth/*`, and note content network-only.
+- Support installable standalone mode without offline editing.
+
+## 9. Verification
 
 - Add unit tests for config, markdown parsing, sorting, conflict handling, and trash limit behavior.
 - Add API tests with the GitHub adapter mocked.

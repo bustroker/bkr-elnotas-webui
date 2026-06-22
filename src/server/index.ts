@@ -2,7 +2,7 @@ import path from "node:path";
 import { loadConfig } from "./config/loadConfig.js";
 import { loadDotEnv } from "./env/loadDotEnv.js";
 import { loadSecrets } from "./env/loadSecrets.js";
-import { createServer } from "./http/createServer.js";
+import { createApp } from "./http/createApp.js";
 
 loadDotEnv();
 
@@ -14,13 +14,11 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) {
 }
 
 const config = await loadConfig(configFilePath);
-loadSecrets(process.env);
-
-const server = createServer({
+const secrets = loadSecrets(process.env);
+const app = await createApp({
   config,
+  secrets,
   clientDistPath: path.resolve("dist/client")
 });
 
-server.listen(port, () => {
-  console.log(`5l-elnotas-webui listening on port ${port}`);
-});
+await app.listen({ port, host: "0.0.0.0" });

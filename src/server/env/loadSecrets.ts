@@ -6,7 +6,7 @@ export function loadSecrets(env: NodeJS.ProcessEnv): AppSecrets {
     githubAppId: requireEnv(env, "GITHUB_APP_ID"),
     githubAppClientId: requireEnv(env, "GITHUB_APP_CLIENT_ID"),
     githubAppClientSecret: requireEnv(env, "GITHUB_APP_CLIENT_SECRET"),
-    githubAppPrivateKey: requireEnv(env, "GITHUB_APP_PRIVATE_KEY"),
+    githubAppPrivateKey: requireEnv(env, "GITHUB_APP_PRIVATE_KEY").replace(/\\n/g, "\n"),
     sessionSecret: requireEnv(env, "SESSION_SECRET")
   };
 }
