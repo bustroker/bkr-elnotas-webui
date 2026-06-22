@@ -1,5 +1,5 @@
 export interface AppConfig {
-  readonly github: GitHubRepositoryConfig;
+  readonly notesGitHubRepository: NotesGitHubRepositoryConfig;
   readonly notesFolder: string;
   readonly trashFolder: string;
   readonly trashSizeLimit: number;
@@ -7,8 +7,8 @@ export interface AppConfig {
   readonly allowedGitHubUsernames: readonly string[];
 }
 
-export interface GitHubRepositoryConfig {
-  readonly owner: string;
+export interface NotesGitHubRepositoryConfig {
+  readonly account: string;
   readonly repo: string;
   readonly branch: string;
 }

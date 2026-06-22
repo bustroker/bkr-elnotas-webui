@@ -10,8 +10,8 @@ export interface PublicConfigSummary {
 
 export function toPublicConfigSummary(config: AppConfig): PublicConfigSummary {
   return {
-    repository: `${config.github.owner}/${config.github.repo}`,
-    branch: config.github.branch,
+    repository: `${config.notesGitHubRepository.account}/${config.notesGitHubRepository.repo}`,
+    branch: config.notesGitHubRepository.branch,
     notesFolder: config.notesFolder,
     trashFolder: config.trashFolder,
     trashSizeLimit: config.trashSizeLimit

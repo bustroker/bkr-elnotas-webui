@@ -25,13 +25,13 @@ function parseJson(fileContent: string, resolvedPath: string): unknown {
 
 function validateConfig(value: unknown): AppConfig {
   const root = requireRecord(value, "config");
-  const github = requireRecord(root.github, "github");
+  const notesGitHubRepository = requireRecord(root.notesGitHubRepository, "notesGitHubRepository");
 
   return {
-    github: {
-      owner: requireNonEmptyString(github.owner, "github.owner"),
-      repo: requireNonEmptyString(github.repo, "github.repo"),
-      branch: requireNonEmptyString(github.branch, "github.branch")
+    notesGitHubRepository: {
+      account: requireNonEmptyString(notesGitHubRepository.account, "notesGitHubRepository.account"),
+      repo: requireNonEmptyString(notesGitHubRepository.repo, "notesGitHubRepository.repo"),
+      branch: requireNonEmptyString(notesGitHubRepository.branch, "notesGitHubRepository.branch")
     },
     notesFolder: requireRelativeFolder(root.notesFolder, "notesFolder"),
     trashFolder: requireRelativeFolder(root.trashFolder, "trashFolder"),

@@ -3,8 +3,8 @@ import type { AppSecrets } from "../src/server/env/AppSecrets.js";
 
 export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
   return {
-    github: {
-      owner: "owner",
+    notesGitHubRepository: {
+      account: "owner",
       repo: "repo",
       branch: "main"
     },

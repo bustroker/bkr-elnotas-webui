@@ -17,10 +17,10 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
   public async listMarkdownFiles(folder: string): Promise<readonly RemoteMarkdownFile[]> {
     const octokit = await this.createInstallationOctokit();
     const response = await octokit.rest.repos.getContent({
-      owner: this.config.github.owner,
-      repo: this.config.github.repo,
+      owner: this.config.notesGitHubRepository.account,
+      repo: this.config.notesGitHubRepository.repo,
       path: folder,
-      ref: this.config.github.branch
+      ref: this.config.notesGitHubRepository.branch
     });
 
     if (!Array.isArray(response.data)) {
@@ -37,10 +37,10 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
   public async readMarkdownFile(filePath: string): Promise<RemoteMarkdownFile> {
     const octokit = await this.createInstallationOctokit();
     const response = await octokit.rest.repos.getContent({
-      owner: this.config.github.owner,
-      repo: this.config.github.repo,
+      owner: this.config.notesGitHubRepository.account,
+      repo: this.config.notesGitHubRepository.repo,
       path: filePath,
-      ref: this.config.github.branch
+      ref: this.config.notesGitHubRepository.branch
     });
 
     if (Array.isArray(response.data) || response.data.type !== "file" || response.data.content === undefined) {
@@ -60,7 +60,7 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
     }
 
     const octokit = await this.createInstallationOctokit();
-    const { owner, repo, branch } = this.config.github;
+    const { account: owner, repo, branch } = this.config.notesGitHubRepository;
     const ref = `heads/${branch}`;
     const currentRef = await octokit.rest.git.getRef({ owner, repo, ref });
     const baseCommitSha = currentRef.data.object.sha;
@@ -116,8 +116,8 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
     const appAuthentication = await appAuth({ type: "app" });
     const appOctokit = new Octokit({ auth: appAuthentication.token });
     const installation = await appOctokit.rest.apps.getRepoInstallation({
-      owner: this.config.github.owner,
-      repo: this.config.github.repo
+      owner: this.config.notesGitHubRepository.account,
+      repo: this.config.notesGitHubRepository.repo
     });
     const installationAuthentication = await appAuth({
       type: "installation",

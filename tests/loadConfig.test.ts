@@ -11,7 +11,7 @@ describe("loadConfig", () => {
     await writeFile(
       filePath,
       JSON.stringify({
-        github: { owner: "owner", repo: "repo", branch: "main" },
+        notesGitHubRepository: { account: "owner", repo: "repo", branch: "main" },
         notesFolder: "notes",
         trashFolder: "trash",
         trashSizeLimit: 10,
@@ -22,7 +22,7 @@ describe("loadConfig", () => {
     );
 
     await expect(loadConfig(filePath)).resolves.toMatchObject({
-      github: { owner: "owner", repo: "repo", branch: "main" },
+      notesGitHubRepository: { account: "owner", repo: "repo", branch: "main" },
       notesFolder: "notes",
       trashFolder: "trash",
       trashSizeLimit: 10
@@ -32,8 +32,12 @@ describe("loadConfig", () => {
   it("rejects missing configured values", async () => {
     const folder = await mkdtemp(path.join(tmpdir(), "elnotas-config-"));
     const filePath = path.join(folder, "app.json");
-    await writeFile(filePath, JSON.stringify({ github: { owner: "", repo: "repo", branch: "main" } }), "utf8");
+    await writeFile(
+      filePath,
+      JSON.stringify({ notesGitHubRepository: { account: "", repo: "repo", branch: "main" } }),
+      "utf8"
+    );
 
-    await expect(loadConfig(filePath)).rejects.toThrow("github.owner");
+    await expect(loadConfig(filePath)).rejects.toThrow("notesGitHubRepository.account");
   });
 });

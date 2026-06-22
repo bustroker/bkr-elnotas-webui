@@ -29,8 +29,8 @@ Edit `config/app.json`:
 
 ```json
 {
-  "github": {
-    "owner": "your-github-owner",
+  "notesGitHubRepository": {
+    "account": "your-notes-github-account-or-org",
     "repo": "elnotas-notes",
     "branch": "main"
   },
@@ -41,6 +41,8 @@ Edit `config/app.json`:
   "allowedGitHubUsernames": ["your-github-username"]
 }
 ```
+
+`notesGitHubRepository.account` is the GitHub user or organization that owns the notes repository. `allowedGitHubUsernames` is the login whitelist for people who may use this web app.
 
 The notes repository must contain root-level folders matching the config:
 

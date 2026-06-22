@@ -1,6 +1,6 @@
 {
-  "github": {
-    "owner": "your-github-owner",
+  "notesGitHubRepository": {
+    "account": "your-notes-github-account-or-org",
     "repo": "elnotas-notes",
     "branch": "main"
   },
