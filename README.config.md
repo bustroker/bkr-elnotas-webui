@@ -63,7 +63,7 @@ GitHub -> Settings -> Developer settings -> GitHub Apps -> New GitHub App
 
 Use these local values:
 
-- GitHub App name: `5l-elnotas-webui-local`
+- GitHub App name: `bkr-elnotas-webui-local`
 - Homepage URL: `http://localhost:3000`
 - Callback URL: `http://localhost:3000/auth/github/callback`
 - Webhook: inactive

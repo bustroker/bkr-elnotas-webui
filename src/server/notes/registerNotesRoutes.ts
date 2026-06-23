@@ -33,7 +33,7 @@ export function registerNotesRoutes(input: {
 
   app.get("/api/health", async () => ({
     status: "ok",
-    app: "5l-elnotas-webui",
+    app: "bkr-elnotas-webui",
     config: toPublicConfigSummary(config)
   }));
 

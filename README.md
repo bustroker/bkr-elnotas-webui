@@ -1,6 +1,6 @@
-# 5l-elnotas-webui
+# bkr-elnotas-webui
 
-`5l-elnotas-webui` is a personal notes web app you can use in the browser or install on your phone, with every note saved as Markdown in a GitHub repo. It provides a private interface for reading, searching, and editing notes while keeping them portable and versioned. It is also agent-friendly: agents can manage the same notes directly through the backing GitHub repo.
+`bkr-elnotas-webui` is a personal notes web app you can use in the browser or install on your phone, with every note saved as Markdown in a GitHub repo. It provides a private interface for reading, searching, and editing notes while keeping them portable and versioned. It is also agent-friendly: agents can manage the same notes directly through the backing GitHub repo.
 
 ## Main Features
 
@@ -25,3 +25,4 @@
 
 - [Configuration](README.config.md)
 - [Run, test, and tech stack](README.run.md)
+- [Deploy on Render](README.deploy.md)

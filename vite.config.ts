@@ -9,7 +9,7 @@ export default defineConfig({
       registerType: "prompt",
       includeAssets: ["apple-touch-icon.png"],
       manifest: {
-        name: "5l El Notas",
+        name: "bkr El Notas",
         short_name: "El Notas",
         description: "Markdown notes from GitHub.",
         display: "standalone",
