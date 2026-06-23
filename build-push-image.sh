@@ -9,9 +9,9 @@ set -e
 #   REGISTRY_PREFIX         Required. Host + namespace, e.g. ghcr.io/quintolabs-es
 #   REGISTRY_USERNAME       Required. Registry username used to login
 #   REGISTRY_TOKEN          Required. Registry token/password used to login
-#   IMAGE_NAME              Optional. Image name/repo (default "bkr-baby-webapi")
-#   IMAGE_TAG               Optional. Tag to publish (default "0.0.1")
-#   DOCKER_DEFAULT_PLATFORM Optional. (default "linux/amd64")
+#   IMAGE_NAME              Required. Image name/repo
+#   IMAGE_TAG               Required. Tag to publish
+#   DOCKER_DEFAULT_PLATFORM Optional. Docker target platform, e.g. linux/amd64
 #
 # Full image ref:
 #   <REGISTRY_PREFIX>/<IMAGE_NAME>:<IMAGE_TAG>
@@ -20,12 +20,12 @@ set -e
 #   REGISTRY_PREFIX=ghcr.io/quintolabs-es
 #   REGISTRY_USERNAME=your-github-username
 #   REGISTRY_TOKEN=ghp_xxx
-#   IMAGE_NAME=org-appname-webapi
-#   IMAGE_TAG=0.0.1
+#   IMAGE_NAME=bkr-elnotas-webui
+#   IMAGE_TAG=1.0.0
 #
 # Final image refs:
-#   ghcr.io/quintolabs-es/org-appname-webapi:0.0.1
-#   ghcr.io/quintolabs-es/org-appname-webapi:latest
+#   ghcr.io/quintolabs-es/bkr-elnotas-webui:1.0.0
+#   ghcr.io/quintolabs-es/bkr-elnotas-webui:latest
 if [ -f .env ]; then
   echo "Loading .env..."
   set -a
@@ -38,7 +38,7 @@ REGISTRY_USERNAME="${REGISTRY_USERNAME:-}"
 REGISTRY_TOKEN="${REGISTRY_TOKEN:-}"
 IMAGE_NAME="${IMAGE_NAME:-}"
 IMAGE_TAG="${IMAGE_TAG:-}"
-export DOCKER_DEFAULT_PLATFORM="${DOCKER_DEFAULT_PLATFORM:-}"
+export DOCKER_DEFAULT_PLATFORM="${DOCKER_DEFAULT_PLATFORM:-linux/amd64}"
 
 if [ -z "$REGISTRY_PREFIX" ]; then
   echo "Missing REGISTRY_PREFIX (example: ghcr.io/quintolabs-es)."
@@ -52,6 +52,16 @@ fi
 
 if [ -z "$REGISTRY_TOKEN" ]; then
   echo "Missing REGISTRY_TOKEN."
+  exit 1
+fi
+
+if [ -z "$IMAGE_NAME" ]; then
+  echo "Missing IMAGE_NAME."
+  exit 1
+fi
+
+if [ -z "$IMAGE_TAG" ]; then
+  echo "Missing IMAGE_TAG."
   exit 1
 fi
 

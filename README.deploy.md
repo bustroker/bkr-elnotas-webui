@@ -1,23 +1,42 @@
 # Deploy On Render
 
-Deploy `bkr-elnotas-webui` to Render as a single Docker container built from this repository.
+Deploy `bkr-elnotas-webui` to Render as a single Docker container published to GitHub Container Registry.
 
 Render Free is enough for personal use if cold starts are acceptable. Free web services spin down after idle time, and their local filesystem is ephemeral. That is acceptable here because GitHub is the source of truth and the local working copy is only a cache.
 
 ## First-Time Setup
 
-Push this app repository to GitHub before creating the Render service.
+Set the image publish variables in `.env`, then publish the first image to GitHub Container Registry:
+
+```env
+REGISTRY_PREFIX=ghcr.io/<github-owner>
+REGISTRY_USERNAME=<github-username>
+REGISTRY_TOKEN=<classic-pat-with-write-packages>
+DOCKER_DEFAULT_PLATFORM=linux/amd64
+IMAGE_NAME=bkr-elnotas-webui
+IMAGE_TAG=1.0.0
+```
+
+```sh
+bash build-push-image.sh
+```
 
 Create the service:
 
 1. Open Render Dashboard.
 2. Select `New > Web Service`.
-3. Connect the GitHub repository for this app.
-4. Use the branch you deploy from, usually `main`.
-5. Use Docker deployment from the repository `Dockerfile`.
+3. Select `Existing Image`.
+4. Set the image URL:
+
+   ```text
+   ghcr.io/<github-owner>/bkr-elnotas-webui:<tag>
+   ```
+
+5. If the image is private, configure a Render registry credential with:
+   - Username: the GitHub user that can read the package
+   - Token: a classic GitHub PAT with `read:packages`
 6. Choose the `Free` instance type.
 7. Set the health check path to `/api/health`.
-8. Leave the root directory empty unless this app is inside a larger monorepo.
 
 Set environment variables:
 
@@ -77,7 +96,13 @@ Configure the GitHub App:
 
 4. Install the GitHub App on the notes repository configured in `app.json`.
 
-The GitHub account connected to Render deploys the app code. The GitHub App configured above is what `bkr-elnotas-webui` uses at runtime to read and write the notes repository.
+Render pulls the app image from GitHub Container Registry. The GitHub App configured above is what `bkr-elnotas-webui` uses at runtime to read and write the notes repository.
+
+Create a Render deploy hook and put it in `.env`:
+
+```env
+RENDER_DEPLOY_HOOK_URL=https://api.render.com/deploy/srv-xxxxx?key=yyyyy
+```
 
 ## Deploy
 
@@ -91,18 +116,22 @@ pnpm test
 pnpm build
 ```
 
-Push the version you want to deploy:
+Build and push the image to GitHub Container Registry:
 
 ```sh
-git push origin main
+bash build-push-image.sh
 ```
 
-If Render auto-deploys are enabled, Render rebuilds and deploys after the push.
+Trigger Render to pull and run the configured image:
 
-If auto-deploys are disabled:
+```sh
+bash deploy-render.sh
+```
 
-```text
-Render Dashboard -> Service -> Manual Deploy -> Deploy latest commit
+To run both steps:
+
+```sh
+bash build-push-image-deploy-render-dev.sh
 ```
 
 After deploy, check:
