@@ -85,6 +85,10 @@ export class WorkingCopyRepository {
     }
   }
 
+  public async clear(): Promise<void> {
+    await rm(this.rootFolder, { recursive: true, force: true });
+  }
+
   private async writeMarkdownFile(remotePath: string, content: string): Promise<void> {
     const localPath = this.localPathFor(remotePath);
     await mkdir(path.dirname(localPath), { recursive: true });

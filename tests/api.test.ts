@@ -38,9 +38,41 @@ describe("notes API", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ notes: [{ id: "one", title: "One" }] });
   });
+
+  it("resets local notes access and clears the current session", async () => {
+    const app = Fastify({ logger: false });
+    await app.register(fastifyCookie);
+    const sessions = new AuthSessionStore();
+    const session = sessions.create("alice");
+    let resetCalled = false;
+    registerNotesRoutes({
+      app,
+      config: testConfig(),
+      sessions,
+      notes: fakeNotesApi({
+        async resetLocalAccess() {
+          resetCalled = true;
+        }
+      })
+    });
+    registerErrorHandler(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/reset-notes-access",
+      cookies: {
+        elnotas_session: session.id
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(resetCalled).toBe(true);
+    expect(sessions.get(session.id)).toBeNull();
+    expect(response.headers["set-cookie"]).toContain("elnotas_session=");
+  });
 });
 
-function fakeNotesApi(): NotesApi {
+function fakeNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
   const note = {
     id: "one",
     fileName: "one.md",
@@ -86,6 +118,8 @@ function fakeNotesApi(): NotesApi {
       return [];
     },
     async permanentlyDeleteTrashNote() {},
-    async emptyTrash() {}
+    async emptyTrash() {},
+    async resetLocalAccess() {},
+    ...overrides
   };
 }

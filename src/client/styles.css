@@ -58,6 +58,12 @@ button:disabled {
   width: min(420px, 100%);
 }
 
+.authMessage {
+  border-radius: 8px;
+  margin: 16px 0;
+  padding: 10px 12px;
+}
+
 .topBar,
 .filters,
 .sectionHeader {
@@ -120,24 +126,51 @@ button:disabled {
   padding: 8px 12px;
 }
 
-.onlineBadge,
-.offlineBadge,
-.updateBadge {
+.updateButton {
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
   padding: 7px 10px;
 }
 
-.onlineBadge {
-  background: #dff4e7;
-  color: #17663a;
+.updateButton {
+  background: #f2c94c;
+  border: 1px solid #d4a51f;
+  color: #3f3108;
 }
 
-.offlineBadge,
-.updateBadge {
-  background: #f3e6bf;
-  color: #735715;
+.updateButton:hover,
+.updateButton:focus {
+  background: #e8b923;
+}
+
+.tooltipBadge {
+  position: relative;
+}
+
+.tooltipBubble {
+  background: #17202f;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgb(22 31 45 / 24%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  left: 50%;
+  line-height: 1.35;
+  opacity: 0;
+  padding: 8px 10px;
+  pointer-events: none;
+  position: absolute;
+  top: calc(100% + 10px);
+  transform: translateX(-50%);
+  transition: opacity 120ms ease;
+  width: 260px;
+  z-index: 20;
+}
+
+.tooltipBadge:hover .tooltipBubble,
+.tooltipBadge:focus .tooltipBubble {
+  opacity: 1;
 }
 
 .filters {
@@ -249,6 +282,8 @@ button:disabled {
   margin: 0 auto 18px;
   max-width: 1180px;
   padding: 12px 14px;
+  position: relative;
+  z-index: 30;
 }
 
 .toast-info {
@@ -330,6 +365,11 @@ button:disabled {
   display: grid;
   gap: 6px;
   margin-bottom: 12px;
+}
+
+.fieldHint {
+  color: #66758a;
+  font-size: 13px;
 }
 
 .modalActions {

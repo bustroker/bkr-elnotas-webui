@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ButtonHTMLAttributes } from "react";
 import {
+  ApiRequestError,
   createNote,
   deleteTrashNote,
   emptyTrash,
@@ -9,6 +10,7 @@ import {
   listTrash,
   pinNote,
   reloadNotes,
+  resetNotesAccess,
   sendNoteToTrash,
   startEditSession,
   updateNote
@@ -22,6 +24,10 @@ type ModalMode = "read" | "edit" | "create";
 interface Toast {
   readonly tone: "info" | "error" | "success";
   readonly message: string;
+}
+
+interface TooltipButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  readonly tooltip: string;
 }
 
 export function App() {
@@ -40,19 +46,12 @@ export function App() {
   const [textFilter, setTextFilter] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
   const [isBusy, setIsBusy] = useState(false);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pwaUpdateReady, setPwaUpdateReady] = useState(false);
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
     const handlePwaUpdate = () => setPwaUpdateReady(true);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
     window.addEventListener("pwa-update-ready", handlePwaUpdate);
     return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
       window.removeEventListener("pwa-update-ready", handlePwaUpdate);
     };
   }, []);
@@ -73,6 +72,7 @@ export function App() {
       return matchesTag && matchesText;
     });
   }, [notes, tagFilter, textFilter]);
+  const canCreateNote = createTitle.trim().length > 0;
 
   async function initialize(): Promise<void> {
     await run("Loading session", async () => {
@@ -129,7 +129,8 @@ export function App() {
   }
 
   async function submitCreate(): Promise<void> {
-    await run("Creating note", async () => {
+    setIsBusy(true);
+    try {
       const result = await createNote({
         title: createTitle,
         body: createBody,
@@ -144,7 +145,20 @@ export function App() {
       setCreateTags("");
       setCreateBody("");
       setToast({ tone: "success", message: "Note created." });
-    });
+    } catch (error) {
+      setActiveNote(null);
+      setModalMode("read");
+      if (error instanceof ApiRequestError && error.code === "not_authenticated") {
+        clearSignedInState();
+        setToast({ tone: "error", message: "Your session expired. Sign in with GitHub again." });
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "Creating note failed.";
+      setToast({ tone: "error", message });
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function togglePin(note: NoteSummary): Promise<void> {
@@ -191,11 +205,52 @@ export function App() {
     });
   }
 
+  async function resetLocalNotesAccess(): Promise<void> {
+    const confirmed = window.confirm(
+      "Disconnect this browser from the GitHub notes repository? You can sign in again later. This will not change permissions in GitHub."
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    await run("Resetting notes access", async () => {
+      await resetNotesAccess();
+      clearSignedInState();
+      setToast({ tone: "success", message: "This browser was disconnected from the GitHub notes repository." });
+    });
+  }
+
+  function updateApp(): void {
+    window.dispatchEvent(new CustomEvent("pwa-apply-update"));
+  }
+
+  function clearSignedInState(): void {
+    setUser({ authenticated: false });
+    setNotes([]);
+    setTrashNotes([]);
+    setActiveNote(null);
+    setModalMode("read");
+    setEditSessionId(null);
+    setEditMarkdown("");
+    setCreateTitle("");
+    setCreateTags("");
+    setCreateBody("");
+    setTagFilter("");
+    setTextFilter("");
+    setViewMode("notes");
+  }
+
   async function run(label: string, action: () => Promise<void>): Promise<void> {
     setIsBusy(true);
     try {
       await action();
     } catch (error) {
+      if (error instanceof ApiRequestError && error.code === "not_authenticated") {
+        clearSignedInState();
+        setToast({ tone: "error", message: "Your session expired. Sign in with GitHub again." });
+        return;
+      }
+
       const message = error instanceof Error ? error.message : `${label} failed.`;
       setToast({ tone: "error", message });
     } finally {
@@ -208,8 +263,12 @@ export function App() {
       <main className="authScreen">
         <section className="authPanel">
           <h1>El Notas</h1>
-          <a className="primaryButton" href="/auth/github">
+          {toast !== null && <p className={`authMessage toast-${toast.tone}`}>{toast.message}</p>}
+          <a className="primaryButton tooltipBadge" href="/auth/github">
             Sign in with GitHub
+            <span className="tooltipBubble" role="tooltip">
+              Sign in with your GitHub account.
+            </span>
           </a>
         </section>
       </main>
@@ -224,26 +283,48 @@ export function App() {
           <p>{user.username}</p>
         </div>
         <div className="topActions">
-          <span className={isOnline ? "onlineBadge" : "offlineBadge"}>{isOnline ? "Online" : "Offline"}</span>
-          {pwaUpdateReady && <span className="updateBadge">Update ready</span>}
-          <button type="button" onClick={() => setModalMode("create")}>
+          {pwaUpdateReady && (
+            <TooltipButton
+              type="button"
+              className="updateButton"
+              onClick={updateApp}
+              tooltip="A new app version is ready. Click to update now, or close all app tabs and reopen later."
+            >
+              Update app
+            </TooltipButton>
+          )}
+          <TooltipButton type="button" onClick={() => setModalMode("create")} tooltip="Create a new note.">
             New
-          </button>
-          <button type="button" onClick={() => void refreshNotes()} disabled={isBusy}>
+          </TooltipButton>
+          <TooltipButton
+            type="button"
+            onClick={() => void refreshNotes()}
+            disabled={isBusy}
+            tooltip="Reload notes from GitHub to get the latest changes."
+          >
             Reload
-          </button>
-          <button type="button" onClick={() => void openTrash()} disabled={isBusy}>
+          </TooltipButton>
+          <TooltipButton type="button" onClick={() => void openTrash()} disabled={isBusy} tooltip="Open notes that were moved to trash.">
             Trash
-          </button>
+          </TooltipButton>
+          <TooltipButton
+            type="button"
+            className="dangerButton"
+            onClick={() => void resetLocalNotesAccess()}
+            disabled={isBusy}
+            tooltip="Disconnect this browser from the GitHub notes repository. You can sign in again later."
+          >
+            Reset Access
+          </TooltipButton>
         </div>
       </header>
 
       {toast !== null && (
         <div className={`toast toast-${toast.tone}`}>
           <span>{toast.message}</span>
-          <button type="button" onClick={() => setToast(null)}>
+          <TooltipButton type="button" onClick={() => setToast(null)} tooltip="Dismiss this message.">
             Close
-          </button>
+          </TooltipButton>
         </div>
       )}
 
@@ -264,7 +345,7 @@ export function App() {
           <section className="cardGrid">
             {filteredNotes.map((note) => (
               <article key={note.id} className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""}`}>
-                <button type="button" className="cardBodyButton" onClick={() => void openNote(note.id)}>
+                <TooltipButton type="button" className="cardBodyButton" onClick={() => void openNote(note.id)} tooltip="Open this note.">
                   <div className="cardHeader">
                     <h2>{note.title}</h2>
                     <time>{formatDate(note.updated)}</time>
@@ -275,10 +356,15 @@ export function App() {
                       <span key={tag}>{tag}</span>
                     ))}
                   </div>
-                </button>
-                <button type="button" className="pinButton" onClick={() => void togglePin(note)}>
+                </TooltipButton>
+                <TooltipButton
+                  type="button"
+                  className="pinButton"
+                  onClick={() => void togglePin(note)}
+                  tooltip={note.pinned ? "Stop keeping this note near the top." : "Keep this note near the top."}
+                >
                   {note.pinned ? "Unpin" : "Pin"}
-                </button>
+                </TooltipButton>
               </article>
             ))}
           </section>
@@ -290,12 +376,18 @@ export function App() {
           <div className="sectionHeader">
             <h2>Trash</h2>
             <div>
-              <button type="button" onClick={() => setViewMode("notes")}>
+              <TooltipButton type="button" onClick={() => setViewMode("notes")} tooltip="Return to active notes.">
                 Back
-              </button>
-              <button type="button" className="dangerButton" onClick={() => void clearTrash()} disabled={trashNotes.length === 0}>
+              </TooltipButton>
+              <TooltipButton
+                type="button"
+                className="dangerButton"
+                onClick={() => void clearTrash()}
+                disabled={trashNotes.length === 0}
+                tooltip="Permanently delete every note currently in trash."
+              >
                 Empty Trash
-              </button>
+              </TooltipButton>
             </div>
           </div>
           <div className="cardGrid">
@@ -306,9 +398,14 @@ export function App() {
                   <time>{formatDate(note.updated)}</time>
                   <p>{note.excerpt || "No content"}</p>
                 </div>
-                <button type="button" className="dangerButton" onClick={() => void deleteTrash(note.id)}>
+                <TooltipButton
+                  type="button"
+                  className="dangerButton"
+                  onClick={() => void deleteTrash(note.id)}
+                  tooltip="Permanently delete this trashed note."
+                >
                   Delete
-                </button>
+                </TooltipButton>
               </article>
             ))}
           </div>
@@ -333,13 +430,14 @@ export function App() {
           <section className="noteModal">
             <div className="modalHeader">
               <h2>New note</h2>
-              <button type="button" onClick={() => setModalMode("read")}>
+              <TooltipButton type="button" onClick={() => setModalMode("read")} tooltip="Close without creating a note.">
                 Close
-              </button>
+              </TooltipButton>
             </div>
             <label>
               Title
               <input value={createTitle} onChange={(event) => setCreateTitle(event.target.value)} />
+              {!canCreateNote && <span className="fieldHint">Add a title to enable Create.</span>}
             </label>
             <label>
               Tags
@@ -350,9 +448,15 @@ export function App() {
               <textarea value={createBody} onChange={(event) => setCreateBody(event.target.value)} />
             </label>
             <div className="modalActions">
-              <button type="button" className="primaryButton" onClick={() => void submitCreate()} disabled={createTitle.trim().length === 0}>
-                Create
-              </button>
+              <TooltipButton
+                type="button"
+                className="primaryButton"
+                onClick={() => void submitCreate()}
+                disabled={!canCreateNote || isBusy}
+                tooltip={canCreateNote ? "Create this note and save it to GitHub." : "Add a title to create the note."}
+              >
+                {isBusy ? "Creating..." : "Create"}
+              </TooltipButton>
             </div>
           </section>
         </div>
@@ -379,9 +483,9 @@ function NoteModal(props: {
             <h2>{props.note.title}</h2>
             <time>{formatDate(props.note.updated)}</time>
           </div>
-          <button type="button" onClick={props.onClose}>
+          <TooltipButton type="button" onClick={props.onClose} tooltip="Close this note.">
             Close
-          </button>
+          </TooltipButton>
         </div>
 
         {props.mode === "edit" ? (
@@ -392,20 +496,32 @@ function NoteModal(props: {
 
         <div className="modalActions">
           {props.mode === "edit" ? (
-            <button type="button" className="primaryButton" onClick={props.onSave}>
+            <TooltipButton type="button" className="primaryButton" onClick={props.onSave} tooltip="Save markdown changes to GitHub.">
               Save
-            </button>
+            </TooltipButton>
           ) : (
-            <button type="button" className="primaryButton" onClick={props.onEdit}>
+            <TooltipButton type="button" className="primaryButton" onClick={props.onEdit} tooltip="Edit this note as raw markdown.">
               Edit
-            </button>
+            </TooltipButton>
           )}
-          <button type="button" className="dangerButton" onClick={props.onTrash}>
+          <TooltipButton type="button" className="dangerButton" onClick={props.onTrash} tooltip="Move this note to trash.">
             Trash
-          </button>
+          </TooltipButton>
         </div>
       </section>
     </div>
+  );
+}
+
+function TooltipButton({ tooltip, className, children, ...props }: TooltipButtonProps) {
+  const tooltipClassName = className === undefined ? "tooltipBadge" : `${className} tooltipBadge`;
+  return (
+    <button {...props} className={tooltipClassName}>
+      {children}
+      <span className="tooltipBubble" role="tooltip">
+        {tooltip}
+      </span>
+    </button>
   );
 }
 

@@ -18,6 +18,8 @@ class FixedClock implements Clock {
 class MemoryGateway implements GitHubNotesGateway {
   public readonly files = new Map<string, RemoteMarkdownFile>();
 
+  public async validateRepositorySetup(): Promise<void> {}
+
   public async listMarkdownFiles(folder: string): Promise<readonly RemoteMarkdownFile[]> {
     return [...this.files.values()].filter((file) => file.path.startsWith(`${folder}/`) && file.path.endsWith(".md"));
   }
@@ -113,6 +115,31 @@ describe("NotesService", () => {
 
     expect(gateway.files.has("trash/20260101-000000-old.md")).toBe(false);
     expect([...gateway.files.keys()].filter((key) => key.startsWith("trash/"))).toHaveLength(2);
+  });
+
+  it("resets local access by clearing the working copy and forcing a future reload", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new MemoryGateway();
+    gateway.files.set("notes/current.md", {
+      path: "notes/current.md",
+      sha: "sha-current",
+      content: noteMarkdown("Current", "Body")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    expect(await service.listNotes()).toHaveLength(1);
+
+    gateway.files.clear();
+    await service.resetLocalAccess();
+
+    expect(await service.listNotes()).toHaveLength(0);
   });
 });
 

@@ -1,5 +1,17 @@
 import type { EditSessionResponse, MutationResult, Note, NoteSummary, UserState } from "./types";
 
+export class ApiRequestError extends Error {
+  public readonly code: string | null;
+  public readonly status: number | null;
+
+  public constructor(input: { readonly code: string | null; readonly message: string; readonly status: number | null }) {
+    super(input.message);
+    this.name = "ApiRequestError";
+    this.code = input.code;
+    this.status = input.status;
+  }
+}
+
 export async function getCurrentUser(): Promise<UserState> {
   return request<UserState>("/api/me");
 }
@@ -12,6 +24,10 @@ export async function listNotes(): Promise<readonly NoteSummary[]> {
 export async function reloadNotes(): Promise<readonly NoteSummary[]> {
   const response = await request<{ readonly notes: readonly NoteSummary[] }>("/api/reload", { method: "POST" });
   return response.notes;
+}
+
+export async function resetNotesAccess(): Promise<void> {
+  await request<void>("/api/reset-notes-access", { method: "POST" });
 }
 
 export async function getNote(id: string): Promise<Note> {
@@ -62,12 +78,20 @@ export async function emptyTrash(): Promise<void> {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const headers = new Headers(init.headers);
+  if (init.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
+
   const response = await fetch(path, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init.headers
-    }
+    headers
+  }).catch(() => {
+    throw new ApiRequestError({
+      code: "network_unavailable",
+      message: "Cannot reach the app server. Start or restart the app, then reload the page.",
+      status: null
+    });
   });
 
   if (response.status === 204) {
@@ -76,14 +100,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   const payload = (await response.json()) as unknown;
   if (!response.ok) {
-    const message = errorMessage(payload) ?? `HTTP ${response.status}`;
-    throw new Error(message);
+    const error = errorPayload(payload);
+    throw new ApiRequestError({
+      code: error?.code ?? null,
+      message: error?.message ?? `HTTP ${response.status}`,
+      status: response.status
+    });
   }
 
   return payload as T;
 }
 
-function errorMessage(payload: unknown): string | null {
+function errorPayload(payload: unknown): { readonly code: string | null; readonly message: string } | null {
   if (typeof payload !== "object" || payload === null || !("error" in payload)) {
     return null;
   }
@@ -94,5 +122,13 @@ function errorMessage(payload: unknown): string | null {
   }
 
   const message = (error as { readonly message?: unknown }).message;
-  return typeof message === "string" ? message : null;
+  if (typeof message !== "string") {
+    return null;
+  }
+
+  const code = (error as { readonly code?: unknown }).code;
+  return {
+    code: typeof code === "string" ? code : null,
+    message
+  };
 }

@@ -35,6 +35,7 @@ export class NotesService {
   }
 
   public async reloadActiveNotes(): Promise<readonly NoteSummary[]> {
+    await this.gateway.validateRepositorySetup();
     const files = await this.gateway.listMarkdownFiles(this.config.notesFolder);
     await this.workingCopy.replaceAll(files);
     this.loaded = true;
@@ -147,7 +148,7 @@ export class NotesService {
       { type: "delete", path: note.path }
     ];
 
-    const trashFiles = await this.gateway.listMarkdownFiles(this.config.trashFolder).catch(() => []);
+    const trashFiles = await this.gateway.listMarkdownFiles(this.config.trashFolder);
     if (trashFiles.length >= this.config.trashSizeLimit) {
       const oldestFiles = [...trashFiles].sort((left, right) => left.path.localeCompare(right.path));
       const deleteCount = trashFiles.length - this.config.trashSizeLimit + 1;
@@ -163,12 +164,12 @@ export class NotesService {
   }
 
   public async listTrash(): Promise<readonly NoteSummary[]> {
-    const files = await this.gateway.listMarkdownFiles(this.config.trashFolder).catch(() => []);
+    const files = await this.gateway.listMarkdownFiles(this.config.trashFolder);
     return sortNotes(files.map((file) => toNoteSummary(parseNoteMarkdown(file.path, file.content))));
   }
 
   public async permanentlyDeleteTrashNote(id: string): Promise<void> {
-    const files = await this.gateway.listMarkdownFiles(this.config.trashFolder).catch(() => []);
+    const files = await this.gateway.listMarkdownFiles(this.config.trashFolder);
     const file = files.find((candidate) => candidate.path.split("/").at(-1)?.replace(/\.md$/i, "") === id);
     if (file === undefined) {
       throw new ResultError("trash_note_not_found", `Trash note '${id}' was not found.`, 404);
@@ -178,11 +179,17 @@ export class NotesService {
   }
 
   public async emptyTrash(): Promise<void> {
-    const files = await this.gateway.listMarkdownFiles(this.config.trashFolder).catch(() => []);
+    const files = await this.gateway.listMarkdownFiles(this.config.trashFolder);
     await this.gateway.commitChanges(
       "Empty trash",
       files.map((file) => ({ type: "delete", path: file.path }))
     );
+  }
+
+  public async resetLocalAccess(): Promise<void> {
+    await this.workingCopy.clear();
+    this.editSessions.clear();
+    this.loaded = false;
   }
 
   private async createConflictCopy(originalPath: string, currentRemoteFile: RemoteMarkdownFile, editedMarkdown: string): Promise<ConflictResult> {

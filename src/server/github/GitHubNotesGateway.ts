@@ -16,6 +16,7 @@ export type GitHubFileChange =
     };
 
 export interface GitHubNotesGateway {
+  validateRepositorySetup(): Promise<void>;
   listMarkdownFiles(folder: string): Promise<readonly RemoteMarkdownFile[]>;
   readMarkdownFile(path: string): Promise<RemoteMarkdownFile>;
   commitChanges(message: string, changes: readonly GitHubFileChange[]): Promise<void>;

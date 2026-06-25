@@ -5,6 +5,7 @@ import type { AuthSessionStore } from "../auth/AuthSessionStore.js";
 import type { AppConfig } from "../config/AppConfig.js";
 import { toPublicConfigSummary } from "../config/PublicConfigSummary.js";
 import { ResultError } from "../shared/ResultError.js";
+import { sessionCookieName } from "../auth/AuthCookies.js";
 import type { Note, NoteSummary } from "./Note.js";
 import type { CreateNoteRequest, NoteMutationResult, PinNoteRequest, UpdateNoteRequest } from "./NoteRequests.js";
 
@@ -114,6 +115,18 @@ export function registerNotesRoutes(input: {
     getRequiredUsername(request, sessions);
     return { notes: await notes.reloadActiveNotes() };
   });
+
+  app.post("/api/reset-notes-access", async (request, reply) => {
+    const session = getSessionFromCookie(request, sessions);
+    if (session === null) {
+      throw new ResultError("not_authenticated", "Authentication is required.", 401);
+    }
+
+    await notes.resetLocalAccess();
+    sessions.delete(session.id);
+    reply.clearCookie(sessionCookieName, { path: "/" });
+    return reply.send({ ok: true });
+  });
 }
 
 export interface NotesApi {
@@ -128,6 +141,7 @@ export interface NotesApi {
   listTrash(): Promise<readonly NoteSummary[]>;
   permanentlyDeleteTrashNote(id: string): Promise<void>;
   emptyTrash(): Promise<void>;
+  resetLocalAccess(): Promise<void>;
 }
 
 function parseBody<T>(schema: z.ZodType<T>, value: unknown): T {

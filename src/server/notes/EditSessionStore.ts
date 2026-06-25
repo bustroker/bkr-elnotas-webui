@@ -29,4 +29,8 @@ export class EditSessionStore {
 
     return session;
   }
+
+  public clear(): void {
+    this.sessions.clear();
+  }
 }
