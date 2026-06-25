@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type ButtonHTMLAttributes } from "react";
+import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { Check, CornerUpLeft, Edit3, Info, Menu, Pin, PinOff, Plus, RefreshCw, RotateCcw, Trash2, Unplug, X } from "lucide-react";
 import {
   ApiRequestError,
   createNote,
@@ -26,8 +27,11 @@ interface Toast {
   readonly message: string;
 }
 
-interface TooltipButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  readonly tooltip: string;
+interface HelpActionProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  readonly help: string;
+  readonly helpId: string;
+  readonly actionClassName?: string;
+  readonly children: ReactNode;
 }
 
 export function App() {
@@ -38,7 +42,9 @@ export function App() {
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [modalMode, setModalMode] = useState<ModalMode>("read");
   const [editSessionId, setEditSessionId] = useState<string | null>(null);
-  const [editMarkdown, setEditMarkdown] = useState("");
+  const [editTitle, setEditTitle] = useState("");
+  const [editTags, setEditTags] = useState("");
+  const [editBody, setEditBody] = useState("");
   const [createTitle, setCreateTitle] = useState("");
   const [createTags, setCreateTags] = useState("");
   const [createBody, setCreateBody] = useState("");
@@ -47,6 +53,9 @@ export function App() {
   const [toast, setToast] = useState<Toast | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [pwaUpdateReady, setPwaUpdateReady] = useState(false);
+  const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
+  const [openHelpId, setOpenHelpId] = useState<string | null>(null);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handlePwaUpdate = () => setPwaUpdateReady(true);
@@ -59,6 +68,41 @@ export function App() {
   useEffect(() => {
     void initialize();
   }, []);
+
+  useEffect(() => {
+    if (!actionsMenuOpen) {
+      return;
+    }
+
+    const closeMenuOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && actionsMenuRef.current?.contains(target) === true) {
+        return;
+      }
+
+      setActionsMenuOpen(false);
+      setOpenHelpId(null);
+    };
+
+    document.addEventListener("pointerdown", closeMenuOnOutsidePointer);
+    return () => {
+      document.removeEventListener("pointerdown", closeMenuOnOutsidePointer);
+    };
+  }, [actionsMenuOpen]);
+
+  useEffect(() => {
+    if (openHelpId === null) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setOpenHelpId(null);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [openHelpId]);
 
   const tags = useMemo(() => {
     return [...new Set(notes.flatMap((note) => note.tags))].sort((left, right) => left.localeCompare(right));
@@ -103,7 +147,9 @@ export function App() {
     await run("Opening editor", async () => {
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
-      setEditMarkdown(response.note.markdown);
+      setEditTitle(response.note.title);
+      setEditTags(response.note.tags.join(", "));
+      setEditBody(response.note.body);
       setEditSessionId(response.editSessionId);
       setModalMode("edit");
     });
@@ -115,7 +161,15 @@ export function App() {
     }
 
     await run("Saving note", async () => {
-      const result = await updateNote(activeNote.id, { markdown: editMarkdown, editSessionId });
+      const result = await updateNote(activeNote.id, {
+        markdown: buildNoteMarkdown({
+          ...activeNote,
+          title: editTitle,
+          tags: parseTags(editTags),
+          body: editBody
+        }),
+        editSessionId
+      });
       setNotes(await listNotes());
       setActiveNote(result.noteId === undefined ? null : await getNote(result.noteId));
       setModalMode("read");
@@ -173,8 +227,13 @@ export function App() {
       return;
     }
 
+    await trashNote(activeNote.id);
+    setActiveNote(null);
+  }
+
+  async function trashNote(id: string): Promise<void> {
     await run("Sending note to trash", async () => {
-      await sendNoteToTrash(activeNote.id);
+      await sendNoteToTrash(id);
       setActiveNote(null);
       setNotes(await listNotes());
       setToast({ tone: "success", message: "Note moved to trash." });
@@ -221,7 +280,19 @@ export function App() {
   }
 
   function updateApp(): void {
+    setActionsMenuOpen(false);
+    setOpenHelpId(null);
     window.dispatchEvent(new CustomEvent("pwa-apply-update"));
+  }
+
+  function runMenuAction(action: () => void): void {
+    setActionsMenuOpen(false);
+    setOpenHelpId(null);
+    action();
+  }
+
+  function toggleHelp(helpId: string): void {
+    setOpenHelpId((currentHelpId) => (currentHelpId === helpId ? null : helpId));
   }
 
   function clearSignedInState(): void {
@@ -231,7 +302,9 @@ export function App() {
     setActiveNote(null);
     setModalMode("read");
     setEditSessionId(null);
-    setEditMarkdown("");
+    setEditTitle("");
+    setEditTags("");
+    setEditBody("");
     setCreateTitle("");
     setCreateTags("");
     setCreateBody("");
@@ -280,47 +353,94 @@ export function App() {
           <p>{user.username}</p>
         </div>
         <div className="topActions">
-          {pwaUpdateReady && (
-            <TooltipButton
+          {viewMode === "trash" ? (
+            <button
               type="button"
-              className="updateButton"
-              onClick={updateApp}
-              tooltip="A new app version is ready. Click to update now, or close all app tabs and reopen later."
+              className="iconButton"
+              onClick={() => setViewMode("notes")}
+              aria-label="Back to notes"
             >
-              Update app
-            </TooltipButton>
+              <CornerUpLeft aria-hidden="true" size={22} />
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="iconButton"
+                onClick={() => setModalMode("create")}
+                aria-label="Create a new note"
+              >
+                <Plus aria-hidden="true" size={22} />
+              </button>
+              <div className="actionsMenu" ref={actionsMenuRef}>
+                <button
+                  type="button"
+                  className="iconButton"
+                  onClick={() => setActionsMenuOpen((isOpen) => !isOpen)}
+                  aria-expanded={actionsMenuOpen}
+                  aria-label="Open more actions"
+                >
+                  <Menu aria-hidden="true" size={22} />
+                </button>
+                {actionsMenuOpen && (
+                  <div className="actionsMenuPanel">
+                    {pwaUpdateReady && (
+                      <HelpAction
+                        type="button"
+                        actionClassName="menuAction updateButton"
+                        onClick={updateApp}
+                        help="A new app version is ready. Click to update now, or close all app tabs and reopen later."
+                        helpId="update-app"
+                        openHelpId={openHelpId}
+                        onToggleHelp={toggleHelp}
+                      >
+                        <RotateCcw aria-hidden="true" size={18} />
+                        <span>Update app</span>
+                      </HelpAction>
+                    )}
+                    <HelpAction
+                      type="button"
+                      actionClassName="menuAction"
+                      onClick={() => runMenuAction(() => void refreshNotes())}
+                      disabled={isBusy}
+                      help="Reload notes from GitHub to get the latest changes."
+                      helpId="reload-notes"
+                      openHelpId={openHelpId}
+                      onToggleHelp={toggleHelp}
+                    >
+                      <RefreshCw aria-hidden="true" size={18} />
+                      <span>Reload</span>
+                    </HelpAction>
+                    <HelpAction
+                      type="button"
+                      actionClassName="menuAction dangerButton"
+                      onClick={() => runMenuAction(() => void resetLocalNotesAccess())}
+                      disabled={isBusy}
+                      help="Disconnect this browser from the GitHub notes repository. You can sign in again later."
+                      helpId="reset-access"
+                      openHelpId={openHelpId}
+                      onToggleHelp={toggleHelp}
+                    >
+                      <Unplug aria-hidden="true" size={18} />
+                      <span>Reset Access</span>
+                    </HelpAction>
+                    <button type="button" className="menuAction" onClick={() => runMenuAction(() => void openTrash())} disabled={isBusy}>
+                      <Trash2 aria-hidden="true" size={18} />
+                      <span>Trash</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
-          <TooltipButton type="button" onClick={() => setModalMode("create")} tooltip="Create a new note.">
-            New
-          </TooltipButton>
-          <TooltipButton
-            type="button"
-            onClick={() => void refreshNotes()}
-            disabled={isBusy}
-            tooltip="Reload notes from GitHub to get the latest changes."
-          >
-            Reload
-          </TooltipButton>
-          <TooltipButton type="button" onClick={() => void openTrash()} disabled={isBusy} tooltip="Open notes that were moved to trash.">
-            Trash
-          </TooltipButton>
-          <TooltipButton
-            type="button"
-            className="dangerButton"
-            onClick={() => void resetLocalNotesAccess()}
-            disabled={isBusy}
-            tooltip="Disconnect this browser from the GitHub notes repository. You can sign in again later."
-          >
-            Reset Access
-          </TooltipButton>
         </div>
       </header>
 
       {toast !== null && (
         <div className={`toast toast-${toast.tone}`}>
           <span>{toast.message}</span>
-          <button type="button" onClick={() => setToast(null)}>
-            Close
+          <button type="button" className="iconButton" onClick={() => setToast(null)} aria-label="Close message">
+            <X aria-hidden="true" size={20} />
           </button>
         </div>
       )}
@@ -358,9 +478,14 @@ export function App() {
                     ))}
                   </div>
                 </button>
-                <button type="button" className="pinButton" onClick={() => void togglePin(note)}>
-                  {note.pinned ? "Unpin" : "Pin"}
-                </button>
+                <div className="cardActions">
+                  <button type="button" className="iconButton pinButton" onClick={() => void togglePin(note)} aria-label={note.pinned ? "Unpin note" : "Pin note"}>
+                    {note.pinned ? <PinOff aria-hidden="true" size={18} /> : <Pin aria-hidden="true" size={18} />}
+                  </button>
+                  <button type="button" className="iconButton dangerButton cardTrashButton" onClick={() => void trashNote(note.id)} aria-label="Move note to trash">
+                    <Trash2 aria-hidden="true" size={18} />
+                  </button>
+                </div>
               </article>
             ))}
           </section>
@@ -372,9 +497,6 @@ export function App() {
           <div className="sectionHeader">
             <h2>Trash</h2>
             <div>
-              <button type="button" onClick={() => setViewMode("notes")}>
-                Back
-              </button>
               <button type="button" className="dangerButton" onClick={() => void clearTrash()} disabled={trashNotes.length === 0}>
                 Empty Trash
               </button>
@@ -405,8 +527,12 @@ export function App() {
         <NoteModal
           mode={modalMode}
           note={activeNote}
-          markdown={editMarkdown}
-          onMarkdownChange={setEditMarkdown}
+          editTitle={editTitle}
+          editTags={editTags}
+          editBody={editBody}
+          onEditTitleChange={setEditTitle}
+          onEditTagsChange={setEditTags}
+          onEditBodyChange={setEditBody}
           onClose={() => setActiveNote(null)}
           onEdit={() => void beginEdit(activeNote)}
           onSave={() => void saveEdit()}
@@ -419,8 +545,8 @@ export function App() {
           <section className="noteModal">
             <div className="modalHeader">
               <h2>New note</h2>
-              <button type="button" onClick={() => setModalMode("read")}>
-                Close
+              <button type="button" className="iconButton" onClick={() => setModalMode("read")} aria-label="Close">
+                <X aria-hidden="true" size={22} />
               </button>
             </div>
             <label>
@@ -437,8 +563,8 @@ export function App() {
               <textarea value={createBody} onChange={(event) => setCreateBody(event.target.value)} />
             </label>
             <div className="modalActions">
-              <button type="button" className="primaryButton" onClick={() => void submitCreate()} disabled={!canCreateNote || isBusy}>
-                {isBusy ? "Creating..." : "Create"}
+              <button type="button" className="iconButton primaryButton" onClick={() => void submitCreate()} disabled={!canCreateNote || isBusy} aria-label="Create note">
+                <Check aria-hidden="true" size={20} />
               </button>
             </div>
           </section>
@@ -451,8 +577,12 @@ export function App() {
 function NoteModal(props: {
   readonly mode: ModalMode;
   readonly note: Note;
-  readonly markdown: string;
-  readonly onMarkdownChange: (value: string) => void;
+  readonly editTitle: string;
+  readonly editTags: string;
+  readonly editBody: string;
+  readonly onEditTitleChange: (value: string) => void;
+  readonly onEditTagsChange: (value: string) => void;
+  readonly onEditBodyChange: (value: string) => void;
   readonly onClose: () => void;
   readonly onEdit: () => void;
   readonly onSave: () => void;
@@ -462,33 +592,43 @@ function NoteModal(props: {
     <div className="modalBackdrop">
       <section className={`noteModal ${props.note.conflict ? "modalConflict" : ""}`}>
         <div className="modalHeader">
-          <div>
-            <h2>{props.note.title}</h2>
-            <time>{formatDate(props.note.updated)}</time>
-          </div>
-          <button type="button" onClick={props.onClose}>
-            Close
+          {props.mode === "edit" ? <h2>Edit note</h2> : <h2>{props.note.title}</h2>}
+          <button type="button" className="iconButton" onClick={props.onClose} aria-label="Close">
+            <X aria-hidden="true" size={22} />
           </button>
         </div>
 
         {props.mode === "edit" ? (
-          <textarea className="markdownEditor" value={props.markdown} onChange={(event) => props.onMarkdownChange(event.target.value)} />
+          <>
+            <label>
+              Title
+              <input value={props.editTitle} onChange={(event) => props.onEditTitleChange(event.target.value)} />
+            </label>
+            <label>
+              Tags
+              <input value={props.editTags} onChange={(event) => props.onEditTagsChange(event.target.value)} placeholder="tag1, tag2" />
+            </label>
+            <label>
+              Markdown
+              <textarea className="markdownEditor" value={props.editBody} onChange={(event) => props.onEditBodyChange(event.target.value)} />
+            </label>
+          </>
         ) : (
           <div className="markdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(props.note.body) }} />
         )}
 
         <div className="modalActions">
           {props.mode === "edit" ? (
-            <button type="button" className="primaryButton" onClick={props.onSave}>
-              Save
+            <button type="button" className="iconButton primaryButton" onClick={props.onSave} aria-label="Save note">
+              <Check aria-hidden="true" size={20} />
             </button>
           ) : (
-            <button type="button" className="primaryButton" onClick={props.onEdit}>
-              Edit
+            <button type="button" className="iconButton primaryButton" onClick={props.onEdit} aria-label="Edit note">
+              <Edit3 aria-hidden="true" size={20} />
             </button>
           )}
-          <button type="button" className="dangerButton" onClick={props.onTrash}>
-            Trash
+          <button type="button" className="iconButton dangerButton" onClick={props.onTrash} aria-label="Move note to trash">
+            <Trash2 aria-hidden="true" size={20} />
           </button>
         </div>
       </section>
@@ -496,15 +636,31 @@ function NoteModal(props: {
   );
 }
 
-function TooltipButton({ tooltip, className, children, ...props }: TooltipButtonProps) {
-  const tooltipClassName = className === undefined ? "tooltipBadge" : `${className} tooltipBadge`;
+function HelpAction({ help, helpId, actionClassName, children, openHelpId, onToggleHelp, ...props }: HelpActionProps & {
+  readonly openHelpId: string | null;
+  readonly onToggleHelp: (helpId: string) => void;
+}) {
+  const isHelpOpen = openHelpId === helpId;
   return (
-    <button {...props} className={tooltipClassName}>
-      {children}
-      <span className="tooltipBubble" role="tooltip">
-        {tooltip}
-      </span>
-    </button>
+    <div className="helpAction">
+      <button {...props} className={actionClassName}>
+        {children}
+      </button>
+      <button
+        type="button"
+        className="helpButton"
+        onClick={() => onToggleHelp(helpId)}
+        aria-expanded={isHelpOpen}
+        aria-label="Show help"
+      >
+        <Info aria-hidden="true" size={20} strokeWidth={2.4} />
+      </button>
+      {isHelpOpen && (
+        <div className="helpPopover" role="status">
+          {help}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -513,6 +669,19 @@ function parseTags(value: string): readonly string[] {
     .split(",")
     .map((tag) => tag.trim())
     .filter((tag) => tag.length > 0);
+}
+
+function buildNoteMarkdown(note: Pick<Note, "title" | "date" | "updated" | "tags" | "pinned" | "conflict" | "body">): string {
+  const metadata = [
+    `title: ${JSON.stringify(note.title)}`,
+    `date: ${note.date}`,
+    `updated: ${note.updated}`,
+    `tags: [${note.tags.map((tag) => JSON.stringify(tag)).join(", ")}]`,
+    note.pinned ? "pinned: true" : null,
+    note.conflict ? "conflict: true" : null
+  ].filter((line): line is string => line !== null);
+
+  return `---\n${metadata.join("\n")}\n---\n\n${note.body.trimStart()}`.trimEnd() + "\n";
 }
 
 function formatDate(value: string): string {

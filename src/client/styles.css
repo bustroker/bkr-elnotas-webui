@@ -98,6 +98,74 @@ button:disabled {
   gap: 10px;
 }
 
+.actionsMenu {
+  position: relative;
+}
+
+.actionsMenuPanel {
+  background: #ffffff;
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  box-shadow: 0 14px 30px rgb(22 31 45 / 18%);
+  display: grid;
+  gap: 8px;
+  min-width: 210px;
+  padding: 10px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 25;
+}
+
+.helpAction {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  position: relative;
+}
+
+.helpButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: #33445f;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+  width: 28px;
+}
+
+.helpButton svg {
+  background: #ffffff;
+  border: 1px solid #c7d2e2;
+  border-radius: 999px;
+}
+
+.topActions .helpButton,
+.actionsMenuPanel .helpButton {
+  padding: 0;
+}
+
+.helpPopover {
+  background: #17202f;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgb(22 31 45 / 24%);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  padding: 8px 10px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 260px;
+  z-index: 30;
+}
+
 .topActions button,
 .modalActions button,
 .sectionHeader button,
@@ -108,6 +176,28 @@ button:disabled {
   background: #ffffff;
   color: #17202f;
   padding: 8px 12px;
+}
+
+.iconButton {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 8px;
+}
+
+.menuAction {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+  width: 100%;
+}
+
+.iconButton.primaryButton,
+.iconButton.dangerButton {
+  display: inline-flex;
 }
 
 .primaryButton {
@@ -142,35 +232,6 @@ button:disabled {
 .updateButton:hover,
 .updateButton:focus {
   background: #e8b923;
-}
-
-.tooltipBadge {
-  position: relative;
-}
-
-.tooltipBubble {
-  background: #17202f;
-  border-radius: 6px;
-  box-shadow: 0 8px 20px rgb(22 31 45 / 24%);
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 500;
-  left: 50%;
-  line-height: 1.35;
-  opacity: 0;
-  padding: 8px 10px;
-  pointer-events: none;
-  position: absolute;
-  top: calc(100% + 10px);
-  transform: translateX(-50%);
-  transition: opacity 120ms ease;
-  width: 260px;
-  z-index: 20;
-}
-
-.tooltipBadge:hover .tooltipBubble,
-.tooltipBadge:focus .tooltipBubble {
-  opacity: 1;
 }
 
 .filters {
@@ -315,9 +376,16 @@ button:disabled {
   padding: 5px 8px;
 }
 
-.pinButton {
-  align-self: flex-start;
+.cardActions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
   margin: 0 16px 16px;
+}
+
+.pinButton,
+.cardTrashButton {
+  align-self: flex-start;
 }
 
 .toast {
