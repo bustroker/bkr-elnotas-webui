@@ -254,6 +254,53 @@ button:disabled {
   line-height: 1.45;
 }
 
+.cardMarkdownBody {
+  color: #405067;
+  line-height: 1.45;
+  margin: 12px 0;
+}
+
+.cardMarkdownBody > :first-child {
+  margin-top: 0;
+}
+
+.cardMarkdownBody > :last-child {
+  margin-bottom: 0;
+}
+
+.cardMarkdownBody h1,
+.cardMarkdownBody h2,
+.cardMarkdownBody h3,
+.cardMarkdownBody h4,
+.cardMarkdownBody h5,
+.cardMarkdownBody h6 {
+  font-size: 15px;
+  line-height: 1.3;
+  margin: 8px 0 6px;
+}
+
+.cardMarkdownBody p,
+.cardMarkdownBody ul,
+.cardMarkdownBody ol,
+.cardMarkdownBody blockquote {
+  margin: 6px 0;
+}
+
+.cardMarkdownBody ul,
+.cardMarkdownBody ol {
+  padding-left: 18px;
+}
+
+.cardMarkdownBody a {
+  color: #1c4e80;
+}
+
+.cardMarkdownBody code {
+  background: #e8eef7;
+  border-radius: 4px;
+  padding: 1px 4px;
+}
+
 .tagRow {
   display: flex;
   flex-wrap: wrap;

@@ -33,7 +33,7 @@ export function toNoteSummary(note: Note): NoteSummary {
     tags: note.tags,
     pinned: note.pinned,
     conflict: note.conflict,
-    excerpt: note.body.replace(/\s+/g, " ").trim().slice(0, 220),
+    excerpt: note.body.trim().slice(0, 220),
     searchableText: `${note.title}\n${note.tags.join(" ")}\n${note.body}`
   };
 }

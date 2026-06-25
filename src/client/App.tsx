@@ -264,11 +264,8 @@ export function App() {
         <section className="authPanel">
           <h1>El Notas</h1>
           {toast !== null && <p className={`authMessage toast-${toast.tone}`}>{toast.message}</p>}
-          <a className="primaryButton tooltipBadge" href="/auth/github">
+          <a className="primaryButton" href="/auth/github">
             Sign in with GitHub
-            <span className="tooltipBubble" role="tooltip">
-              Sign in with your GitHub account.
-            </span>
           </a>
         </section>
       </main>
@@ -322,9 +319,9 @@ export function App() {
       {toast !== null && (
         <div className={`toast toast-${toast.tone}`}>
           <span>{toast.message}</span>
-          <TooltipButton type="button" onClick={() => setToast(null)} tooltip="Dismiss this message.">
+          <button type="button" onClick={() => setToast(null)}>
             Close
-          </TooltipButton>
+          </button>
         </div>
       )}
 
@@ -345,26 +342,25 @@ export function App() {
           <section className="cardGrid">
             {filteredNotes.map((note) => (
               <article key={note.id} className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""}`}>
-                <TooltipButton type="button" className="cardBodyButton" onClick={() => void openNote(note.id)} tooltip="Open this note.">
+                <button type="button" className="cardBodyButton" onClick={() => void openNote(note.id)}>
                   <div className="cardHeader">
                     <h2>{note.title}</h2>
                     <time>{formatDate(note.updated)}</time>
                   </div>
-                  <p>{note.excerpt || "No content"}</p>
+                  {note.excerpt.length > 0 ? (
+                    <div className="cardMarkdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(note.excerpt) }} />
+                  ) : (
+                    <p>No content</p>
+                  )}
                   <div className="tagRow">
                     {note.tags.map((tag) => (
                       <span key={tag}>{tag}</span>
                     ))}
                   </div>
-                </TooltipButton>
-                <TooltipButton
-                  type="button"
-                  className="pinButton"
-                  onClick={() => void togglePin(note)}
-                  tooltip={note.pinned ? "Stop keeping this note near the top." : "Keep this note near the top."}
-                >
+                </button>
+                <button type="button" className="pinButton" onClick={() => void togglePin(note)}>
                   {note.pinned ? "Unpin" : "Pin"}
-                </TooltipButton>
+                </button>
               </article>
             ))}
           </section>
@@ -376,18 +372,12 @@ export function App() {
           <div className="sectionHeader">
             <h2>Trash</h2>
             <div>
-              <TooltipButton type="button" onClick={() => setViewMode("notes")} tooltip="Return to active notes.">
+              <button type="button" onClick={() => setViewMode("notes")}>
                 Back
-              </TooltipButton>
-              <TooltipButton
-                type="button"
-                className="dangerButton"
-                onClick={() => void clearTrash()}
-                disabled={trashNotes.length === 0}
-                tooltip="Permanently delete every note currently in trash."
-              >
+              </button>
+              <button type="button" className="dangerButton" onClick={() => void clearTrash()} disabled={trashNotes.length === 0}>
                 Empty Trash
-              </TooltipButton>
+              </button>
             </div>
           </div>
           <div className="cardGrid">
@@ -396,16 +386,15 @@ export function App() {
                 <div className="trashCardBody">
                   <h2>{note.title}</h2>
                   <time>{formatDate(note.updated)}</time>
-                  <p>{note.excerpt || "No content"}</p>
+                  {note.excerpt.length > 0 ? (
+                    <div className="cardMarkdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(note.excerpt) }} />
+                  ) : (
+                    <p>No content</p>
+                  )}
                 </div>
-                <TooltipButton
-                  type="button"
-                  className="dangerButton"
-                  onClick={() => void deleteTrash(note.id)}
-                  tooltip="Permanently delete this trashed note."
-                >
+                <button type="button" className="dangerButton" onClick={() => void deleteTrash(note.id)}>
                   Delete
-                </TooltipButton>
+                </button>
               </article>
             ))}
           </div>
@@ -430,9 +419,9 @@ export function App() {
           <section className="noteModal">
             <div className="modalHeader">
               <h2>New note</h2>
-              <TooltipButton type="button" onClick={() => setModalMode("read")} tooltip="Close without creating a note.">
+              <button type="button" onClick={() => setModalMode("read")}>
                 Close
-              </TooltipButton>
+              </button>
             </div>
             <label>
               Title
@@ -448,15 +437,9 @@ export function App() {
               <textarea value={createBody} onChange={(event) => setCreateBody(event.target.value)} />
             </label>
             <div className="modalActions">
-              <TooltipButton
-                type="button"
-                className="primaryButton"
-                onClick={() => void submitCreate()}
-                disabled={!canCreateNote || isBusy}
-                tooltip={canCreateNote ? "Create this note and save it to GitHub." : "Add a title to create the note."}
-              >
+              <button type="button" className="primaryButton" onClick={() => void submitCreate()} disabled={!canCreateNote || isBusy}>
                 {isBusy ? "Creating..." : "Create"}
-              </TooltipButton>
+              </button>
             </div>
           </section>
         </div>
@@ -483,9 +466,9 @@ function NoteModal(props: {
             <h2>{props.note.title}</h2>
             <time>{formatDate(props.note.updated)}</time>
           </div>
-          <TooltipButton type="button" onClick={props.onClose} tooltip="Close this note.">
+          <button type="button" onClick={props.onClose}>
             Close
-          </TooltipButton>
+          </button>
         </div>
 
         {props.mode === "edit" ? (
@@ -496,17 +479,17 @@ function NoteModal(props: {
 
         <div className="modalActions">
           {props.mode === "edit" ? (
-            <TooltipButton type="button" className="primaryButton" onClick={props.onSave} tooltip="Save markdown changes to GitHub.">
+            <button type="button" className="primaryButton" onClick={props.onSave}>
               Save
-            </TooltipButton>
+            </button>
           ) : (
-            <TooltipButton type="button" className="primaryButton" onClick={props.onEdit} tooltip="Edit this note as raw markdown.">
+            <button type="button" className="primaryButton" onClick={props.onEdit}>
               Edit
-            </TooltipButton>
+            </button>
           )}
-          <TooltipButton type="button" className="dangerButton" onClick={props.onTrash} tooltip="Move this note to trash.">
+          <button type="button" className="dangerButton" onClick={props.onTrash}>
             Trash
-          </TooltipButton>
+          </button>
         </div>
       </section>
     </div>
@@ -534,5 +517,12 @@ function parseTags(value: string): readonly string[] {
 
 function formatDate(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+  return Number.isNaN(date.getTime())
+    ? value
+    : date.toLocaleString(undefined, {
+        dateStyle: "short",
+        timeStyle: "short",
+        hour12: false,
+        hourCycle: "h23"
+      });
 }
