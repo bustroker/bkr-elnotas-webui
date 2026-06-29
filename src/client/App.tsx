@@ -332,7 +332,7 @@ export function App() {
     await run("Resetting notes access", async () => {
       await resetNotesAccess();
       clearSignedInState();
-      setToast({ tone: "success", message: "This browser was disconnected from the GitHub notes repository." });
+      setToast({ tone: "success", message: "This device was disconnected from the GitHub notes repository." });
     });
   }
 
@@ -394,7 +394,7 @@ export function App() {
         <section className="authPanel">
           <h1>El Notas</h1>
           {toast !== null && <p className={`authMessage toast-${toast.tone}`}>{toast.message}</p>}
-          <a className="primaryButton" href="/auth/github">
+          <a className="button buttonPrimary" href="/auth/github">
             Sign in with GitHub
           </a>
         </section>
@@ -444,7 +444,7 @@ export function App() {
                     {pwaUpdateReady && (
                       <HelpAction
                         type="button"
-                        actionClassName="menuAction updateButton"
+                        actionClassName="menuAction buttonWarning"
                         onClick={updateApp}
                         help="A new app version is ready. Click to update now, or close all app tabs and reopen later."
                         helpId="update-app"
@@ -470,10 +470,10 @@ export function App() {
                     </HelpAction>
                     <HelpAction
                       type="button"
-                      actionClassName="menuAction dangerButton"
+                      actionClassName="menuAction buttonDanger"
                       onClick={() => runMenuAction(() => setResetConfirmOpen(true))}
                       disabled={isBusy}
-                      help="Disconnect this browser from the GitHub notes repository. You can sign in again later."
+                      help="Disconnect this device from the GitHub notes repository. You can sign in again later."
                       helpId="reset-access"
                       openHelpId={openHelpId}
                       onToggleHelp={toggleHelp}
@@ -496,7 +496,7 @@ export function App() {
       {toast !== null && (
         <div className={`toast toast-${toast.tone}`}>
           <span>{toast.message}</span>
-          <button type="button" className="iconButton" onClick={() => setToast(null)} aria-label="Close message">
+          <button type="button" className="iconButton buttonSubtle" onClick={() => setToast(null)} aria-label="Close message">
             <X aria-hidden="true" size={20} />
           </button>
         </div>
@@ -507,18 +507,18 @@ export function App() {
           <section className="confirmModal">
             <div className="modalHeader">
               <h2>Disconnect notes repository?</h2>
-              <button type="button" className="iconButton subtleCloseButton" onClick={() => setResetConfirmOpen(false)} aria-label="Close">
+              <button type="button" className="iconButton buttonSubtle" onClick={() => setResetConfirmOpen(false)} aria-label="Close">
                 <X aria-hidden="true" size={22} />
               </button>
             </div>
             <p>
-              This disconnects this browser from the GitHub notes repository. It does not change permissions in GitHub, and you can sign in again later.
+              This disconnects this device from the GitHub notes repository. It does not change permissions in GitHub, and you can sign in again later.
             </p>
             <div className="modalActions">
-              <button type="button" onClick={() => setResetConfirmOpen(false)}>
+              <button type="button" className="button" onClick={() => setResetConfirmOpen(false)}>
                 Cancel
               </button>
-              <button type="button" className="dangerButton" onClick={() => void resetLocalNotesAccess()} disabled={isBusy}>
+              <button type="button" className="button buttonDanger" onClick={() => void resetLocalNotesAccess()} disabled={isBusy}>
                 Disconnect
               </button>
             </div>
@@ -553,7 +553,7 @@ export function App() {
           <div className="sectionHeader">
             <h2>Trash</h2>
             <div>
-              <button type="button" className="dangerButton" onClick={() => void clearTrash()} disabled={trashNotes.length === 0}>
+              <button type="button" className="button buttonDanger" onClick={() => void clearTrash()} disabled={trashNotes.length === 0}>
                 Empty Trash
               </button>
             </div>
@@ -570,7 +570,7 @@ export function App() {
                     <p>No content</p>
                   )}
                 </div>
-                <button type="button" className="dangerButton" onClick={() => void deleteTrash(note.id)}>
+                <button type="button" className="button buttonDanger" onClick={() => void deleteTrash(note.id)}>
                   Delete
                 </button>
               </article>
@@ -601,7 +601,7 @@ export function App() {
           <section className="noteModal">
             <div className="modalHeader">
               <h2>New note</h2>
-              <button type="button" className="iconButton subtleCloseButton" onClick={() => setModalMode("read")} aria-label="Close">
+              <button type="button" className="iconButton buttonSubtle" onClick={() => setModalMode("read")} aria-label="Close">
                 <X aria-hidden="true" size={22} />
               </button>
             </div>
@@ -619,7 +619,7 @@ export function App() {
               <textarea value={createBody} onChange={(event) => setCreateBody(event.target.value)} />
             </label>
             <div className="modalActions">
-              <button type="button" className="iconButton primaryButton" onClick={() => void submitCreate()} disabled={!canCreateNote || isBusy} aria-label="Create note">
+              <button type="button" className="iconButton buttonPrimary" onClick={() => void submitCreate()} disabled={!canCreateNote || isBusy} aria-label="Create note">
                 <Check aria-hidden="true" size={20} />
               </button>
             </div>
@@ -666,7 +666,7 @@ export function App() {
           <button type="button" className="iconButton" onClick={() => void beginEditById(note.id)} aria-label="Edit note">
             <Edit3 aria-hidden="true" size={18} />
           </button>
-          <button type="button" className="iconButton dangerButton cardTrashButton" onClick={() => void trashNote(note.id)} aria-label="Move note to trash">
+          <button type="button" className="iconButton buttonDanger cardTrashButton" onClick={() => void trashNote(note.id)} aria-label="Move note to trash">
             <Trash2 aria-hidden="true" size={18} />
           </button>
         </div>
@@ -709,7 +709,7 @@ function NoteModal(props: {
               </div>
             )}
           </div>
-          <button type="button" className="iconButton subtleCloseButton" onClick={props.onClose} aria-label="Close">
+          <button type="button" className="iconButton buttonSubtle" onClick={props.onClose} aria-label="Close">
             <X aria-hidden="true" size={22} />
           </button>
         </div>
@@ -735,15 +735,15 @@ function NoteModal(props: {
 
         <div className="modalActions">
           {props.mode === "edit" ? (
-            <button type="button" className="iconButton primaryButton" onClick={props.onSave} aria-label="Save note">
+            <button type="button" className="iconButton buttonPrimary" onClick={props.onSave} aria-label="Save note">
               <Check aria-hidden="true" size={20} />
             </button>
           ) : (
-            <button type="button" className="iconButton primaryButton" onClick={props.onEdit} aria-label="Edit note">
+            <button type="button" className="iconButton" onClick={props.onEdit} aria-label="Edit note">
               <Edit3 aria-hidden="true" size={20} />
             </button>
           )}
-          <button type="button" className="iconButton dangerButton" onClick={props.onTrash} aria-label="Move note to trash">
+          <button type="button" className="iconButton buttonDanger" onClick={props.onTrash} aria-label="Move note to trash">
             <Trash2 aria-hidden="true" size={20} />
           </button>
         </div>
