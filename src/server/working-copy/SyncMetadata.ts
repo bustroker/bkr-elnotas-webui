@@ -3,7 +3,7 @@ export interface SyncMetadata {
 }
 
 export interface SyncMetadataFile {
-  readonly sha: string;
+  readonly sha: string | null;
   readonly path: string;
 }
 

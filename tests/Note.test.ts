@@ -20,6 +20,7 @@ function noteWithBody(body: string): Note {
     tags: [],
     pinned: false,
     conflict: false,
+    saveFailed: false,
     body,
     markdown: body
   };

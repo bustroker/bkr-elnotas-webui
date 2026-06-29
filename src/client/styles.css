@@ -22,6 +22,11 @@ textarea {
 
 button {
   cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 80ms ease;
 }
 
 button:disabled {
@@ -109,7 +114,7 @@ button:disabled {
   box-shadow: 0 14px 30px rgb(22 31 45 / 18%);
   display: grid;
   gap: 8px;
-  min-width: 210px;
+  min-width: 270px;
   padding: 10px;
   position: absolute;
   right: 0;
@@ -124,30 +129,24 @@ button:disabled {
   position: relative;
 }
 
-.helpButton {
+.helpIconControl {
   align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
   color: #33445f;
   display: inline-flex;
-  height: 28px;
   justify-content: center;
-  min-height: 28px;
-  min-width: 28px;
-  padding: 0;
-  width: 28px;
+  line-height: 0;
+  padding: 0 2px;
 }
 
-.helpButton svg {
-  background: #ffffff;
-  border: 1px solid #c7d2e2;
-  border-radius: 999px;
+.helpIconControl:hover,
+.helpIconControl:focus {
+  color: #17202f;
+  outline: none;
 }
 
-.topActions .helpButton,
-.actionsMenuPanel .helpButton {
-  padding: 0;
+.helpIconControl:focus-visible {
+  outline: 2px solid #1c4e80;
+  outline-offset: 3px;
 }
 
 .helpPopover {
@@ -178,6 +177,14 @@ button:disabled {
   padding: 8px 12px;
 }
 
+.topActions button,
+.modalActions button,
+.sectionHeader button,
+.menuAction,
+.iconButton {
+  min-height: 40px;
+}
+
 .iconButton {
   align-items: center;
   display: inline-flex;
@@ -195,9 +202,65 @@ button:disabled {
   width: 100%;
 }
 
+.menuAction span {
+  white-space: nowrap;
+}
+
 .iconButton.primaryButton,
 .iconButton.dangerButton {
   display: inline-flex;
+}
+
+.iconButton:hover,
+.topActions button:hover,
+.modalActions button:hover,
+.sectionHeader button:hover,
+.pinButton:hover {
+  box-shadow: 0 2px 8px rgb(22 31 45 / 12%);
+}
+
+.iconButton:active,
+.topActions button:active,
+.modalActions button:active,
+.sectionHeader button:active,
+.pinButton:active {
+  box-shadow: inset 0 2px 4px rgb(22 31 45 / 18%);
+  transform: translateY(1px) scale(0.97);
+}
+
+.primaryButton:hover,
+.primaryButton:focus {
+  background: #163f68;
+  border-color: #163f68;
+}
+
+.primaryButton:active {
+  background: #123552;
+  border-color: #123552;
+}
+
+.dangerButton:hover,
+.dangerButton:focus {
+  background: #851818;
+  border-color: #851818;
+}
+
+.dangerButton:active {
+  background: #6f1414;
+  border-color: #6f1414;
+}
+
+.subtleCloseButton {
+  background: transparent;
+  border-color: transparent;
+  color: #66758a;
+}
+
+.subtleCloseButton:hover,
+.subtleCloseButton:focus {
+  background: #f5f7fb;
+  border-color: #d8e0ec;
+  color: #17202f;
 }
 
 .primaryButton {
@@ -208,12 +271,23 @@ button:disabled {
   text-decoration: none;
 }
 
+button.primaryButton,
+a.primaryButton {
+  color: #ffffff;
+}
+
 .dangerButton {
   background: #9f1d1d;
   border: 1px solid #9f1d1d;
   border-radius: 6px;
   color: #ffffff;
   padding: 8px 12px;
+}
+
+button.dangerButton,
+.menuAction.dangerButton,
+.iconButton.dangerButton {
+  color: #ffffff;
 }
 
 .updateButton {
@@ -264,6 +338,8 @@ button:disabled {
 .noteCard {
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
+  max-height: min(78vh, 840px);
   min-height: 210px;
   overflow: hidden;
 }
@@ -274,16 +350,31 @@ button:disabled {
 }
 
 .noteConflict,
-.modalConflict {
+.noteSaveFailed,
+.modalConflict,
+.modalSaveFailed {
   background: #fff0f0;
   border-color: #d64545;
+}
+
+.statusBadge {
+  background: #d64545;
+  border-radius: 999px;
+  color: #ffffff;
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  margin: 10px 0 0;
+  padding: 4px 8px;
 }
 
 .cardBodyButton {
   background: transparent;
   border: 0;
   color: inherit;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
   padding: 16px;
   text-align: left;
 }
@@ -319,6 +410,7 @@ button:disabled {
   color: #405067;
   line-height: 1.45;
   margin: 12px 0;
+  overflow-wrap: anywhere;
 }
 
 .cardMarkdownBody > :first-child {
@@ -379,6 +471,7 @@ button:disabled {
 .cardActions {
   align-items: center;
   display: flex;
+  flex: 0 0 auto;
   gap: 8px;
   margin: 0 16px 16px;
 }
@@ -435,8 +528,25 @@ button:disabled {
   flex-direction: column;
   max-height: 88vh;
   max-width: 920px;
+  overflow: auto;
   padding: 18px;
   width: min(920px, 100%);
+}
+
+.confirmModal {
+  background: #ffffff;
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  box-shadow: 0 20px 60px rgb(22 31 45 / 24%);
+  max-width: 460px;
+  padding: 18px;
+  width: min(460px, 100%);
+}
+
+.confirmModal p {
+  color: #405067;
+  line-height: 1.5;
+  margin: 0;
 }
 
 .modalHeader {
@@ -445,6 +555,25 @@ button:disabled {
   gap: 16px;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.modalTitleBlock {
+  display: grid;
+  gap: 8px;
+}
+
+.modalTagRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.modalTagRow span {
+  background: #e8eef7;
+  border-radius: 999px;
+  color: #33445f;
+  font-size: 12px;
+  padding: 5px 8px;
 }
 
 .markdownBody {
@@ -472,7 +601,7 @@ button:disabled {
 
 .markdownEditor,
 .noteModal textarea {
-  min-height: 48vh;
+  min-height: clamp(220px, 36vh, 460px);
   resize: vertical;
 }
 

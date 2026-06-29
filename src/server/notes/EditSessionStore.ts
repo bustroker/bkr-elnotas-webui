@@ -4,7 +4,7 @@ export interface EditSession {
   readonly id: string;
   readonly noteId: string;
   readonly path: string;
-  readonly sha: string;
+  readonly sha: string | null;
   readonly createdAt: number;
 }
 

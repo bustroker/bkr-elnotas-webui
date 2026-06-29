@@ -15,6 +15,7 @@ export interface PinNoteRequest {
 
 export interface NoteMutationResult {
   readonly noteId?: string;
+  readonly saveFailed?: true;
   readonly conflict?: ConflictResult;
 }
 

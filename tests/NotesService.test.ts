@@ -49,6 +49,21 @@ class MemoryGateway implements GitHubNotesGateway {
   }
 }
 
+class BlockingCommitGateway extends MemoryGateway {
+  public commitStarted = false;
+
+  public override async commitChanges(): Promise<void> {
+    this.commitStarted = true;
+    return new Promise(() => {});
+  }
+}
+
+class FailingCommitGateway extends MemoryGateway {
+  public override async commitChanges(): Promise<void> {
+    throw new Error("GitHub unavailable");
+  }
+}
+
 describe("NotesService", () => {
   it("creates conflict copy and marks original when edit SHA is stale", async () => {
     const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
@@ -115,6 +130,80 @@ describe("NotesService", () => {
 
     expect(gateway.files.has("trash/20260101-000000-old.md")).toBe(false);
     expect([...gateway.files.keys()].filter((key) => key.startsWith("trash/"))).toHaveLength(2);
+  });
+
+  it("pins notes in the working copy without waiting for the GitHub commit", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new BlockingCommitGateway();
+    gateway.files.set("notes/current.md", {
+      path: "notes/current.md",
+      sha: "sha-current",
+      content: noteMarkdown("Current", "Body")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    const result = await service.pinNote("current", { pinned: true });
+    const notes = await service.listNotes();
+
+    expect(result).toEqual({ noteId: "current" });
+    expect(gateway.commitStarted).toBe(true);
+    expect(notes[0]?.pinned).toBe(true);
+  });
+
+  it("keeps created notes locally with save_failed when GitHub save fails", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new FailingCommitGateway();
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    const result = await service.createNote({ title: "Local", body: "Body", tags: ["test"] });
+    const notes = await service.listNotes();
+
+    expect(result.saveFailed).toBe(true);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]?.saveFailed).toBe(true);
+  });
+
+  it("marks updated notes with save_failed when GitHub save fails", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new FailingCommitGateway();
+    gateway.files.set("notes/current.md", {
+      path: "notes/current.md",
+      sha: "sha-current",
+      content: noteMarkdown("Current", "Body")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    const edit = await service.startEditSession("current");
+    const result = await service.updateNote("current", {
+      editSessionId: edit.editSessionId,
+      markdown: noteMarkdown("Current", "Updated")
+    });
+    const note = await service.getNote("current");
+
+    expect(result.saveFailed).toBe(true);
+    expect(note.saveFailed).toBe(true);
+    expect(note.body).toContain("Updated");
   });
 
   it("resets local access by clearing the working copy and forcing a future reload", async () => {

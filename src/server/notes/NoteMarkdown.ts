@@ -8,6 +8,7 @@ export interface NoteMetadata {
   readonly tags: readonly string[];
   readonly pinned?: true;
   readonly conflict?: true;
+  readonly saveFailed?: true;
 }
 
 export function parseNoteMarkdown(path: string, markdown: string): Note {
@@ -25,6 +26,7 @@ export function parseNoteMarkdown(path: string, markdown: string): Note {
     tags: metadata.tags,
     pinned: metadata.pinned === true,
     conflict: metadata.conflict === true,
+    saveFailed: metadata.saveFailed === true,
     body: parsed.content,
     markdown: serializeNoteMarkdown(metadata, parsed.content)
   };
@@ -44,6 +46,10 @@ export function serializeNoteMarkdown(metadata: NoteMetadata, body: string): str
 
   if (metadata.conflict === true) {
     data.conflict = true;
+  }
+
+  if (metadata.saveFailed === true) {
+    data.save_failed = true;
   }
 
   return matter.stringify(body.trimStart(), data).trimEnd() + "\n";
@@ -79,7 +85,8 @@ function normalizeMetadata(value: Record<string, unknown>, path: string): NoteMe
     updated: readString(value.updated) ?? readString(value.date) ?? new Date(0).toISOString(),
     tags: normalizeTags(readTags(value.tags)),
     pinned: value.pinned === true ? true : undefined,
-    conflict: value.conflict === true ? true : undefined
+    conflict: value.conflict === true ? true : undefined,
+    saveFailed: value.save_failed === true ? true : undefined
   };
 }
 

@@ -1,6 +1,13 @@
 export interface UserState {
   readonly authenticated: boolean;
   readonly username?: string;
+  readonly config?: {
+    readonly repository: string;
+    readonly branch: string;
+    readonly notesFolder: string;
+    readonly trashFolder: string;
+    readonly trashSizeLimit: number;
+  };
 }
 
 export interface NoteSummary {
@@ -11,6 +18,7 @@ export interface NoteSummary {
   readonly tags: readonly string[];
   readonly pinned: boolean;
   readonly conflict: boolean;
+  readonly saveFailed: boolean;
   readonly excerpt: string;
   readonly searchableText: string;
 }
@@ -29,6 +37,7 @@ export interface EditSessionResponse {
 
 export interface MutationResult {
   readonly noteId?: string;
+  readonly saveFailed?: true;
   readonly conflict?: {
     readonly originalNoteId: string;
     readonly conflictNoteId: string;

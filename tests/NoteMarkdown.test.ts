@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseNoteMarkdown, serializeNoteMarkdown } from "../src/server/notes/NoteMarkdown.js";
 
 describe("NoteMarkdown", () => {
-  it("omits pinned and conflict when they do not apply", () => {
+  it("omits optional status metadata when they do not apply", () => {
     const markdown = serializeNoteMarkdown(
       {
         title: "Title",
@@ -15,9 +15,10 @@ describe("NoteMarkdown", () => {
 
     expect(markdown).not.toContain("pinned:");
     expect(markdown).not.toContain("conflict:");
+    expect(markdown).not.toContain("save_failed:");
   });
 
-  it("reads pinned and conflict metadata when present", () => {
+  it("reads optional status metadata when present", () => {
     const note = parseNoteMarkdown(
       "notes/example.md",
       `---
@@ -28,6 +29,7 @@ tags:
   - a
 pinned: true
 conflict: true
+save_failed: true
 ---
 
 Body`
@@ -35,6 +37,7 @@ Body`
 
     expect(note.pinned).toBe(true);
     expect(note.conflict).toBe(true);
+    expect(note.saveFailed).toBe(true);
     expect(note.tags).toEqual(["a"]);
   });
 });

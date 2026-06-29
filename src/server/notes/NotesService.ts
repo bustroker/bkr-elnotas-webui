@@ -64,8 +64,15 @@ export class NotesService {
       nowIso
     });
 
-    await this.gateway.commitChanges(`Add note: ${request.title}`, [{ type: "write", path: filePath, content: markdown }]);
-    await this.reloadActiveNotes();
+    try {
+      await this.gateway.commitChanges(`Add note: ${request.title}`, [{ type: "write", path: filePath, content: markdown }]);
+      await this.reloadActiveNotes();
+    } catch (error) {
+      const failedMarkdown = this.markSaveFailed(markdown);
+      await this.workingCopy.writeLocalNote(parseNoteMarkdown(filePath, failedMarkdown));
+      console.error(`Failed to create note '${request.title}' in GitHub.`, error);
+      return { noteId: fileName.replace(/\.md$/i, ""), saveFailed: true };
+    }
 
     return { noteId: fileName.replace(/\.md$/i, "") };
   }
@@ -73,6 +80,19 @@ export class NotesService {
   public async startEditSession(id: string): Promise<{ readonly note: Note; readonly editSessionId: string }> {
     await this.ensureLoaded();
     const note = await this.workingCopy.getNote(id);
+    if (note.saveFailed) {
+      const editSession = this.editSessions.create({
+        noteId: note.id,
+        path: note.path,
+        sha: await this.workingCopy.getFileSha(note.id)
+      });
+
+      return {
+        note,
+        editSessionId: editSession.id
+      };
+    }
+
     const remoteFile = await this.gateway.readMarkdownFile(note.path);
     await this.workingCopy.writeRemoteFile(remoteFile);
     const refreshedNote = parseNoteMarkdown(remoteFile.path, remoteFile.content);
@@ -94,27 +114,37 @@ export class NotesService {
       throw new ResultError("invalid_edit_session", "The edit session is missing or invalid.", 409);
     }
 
-    const currentRemoteFile = await this.gateway.readMarkdownFile(editSession.path);
-    if (currentRemoteFile.sha !== editSession.sha) {
-      const conflict = await this.createConflictCopy(editSession.path, currentRemoteFile, request.markdown);
-      await this.reloadActiveNotes();
-      return { conflict };
+    if (editSession.sha !== null) {
+      const currentRemoteFile = await this.gateway.readMarkdownFile(editSession.path);
+      if (currentRemoteFile.sha !== editSession.sha) {
+        const conflict = await this.createConflictCopy(editSession.path, currentRemoteFile, request.markdown);
+        await this.reloadActiveNotes();
+        return { conflict };
+      }
     }
 
     const updatedMarkdown = updateMarkdownMetadata(request.markdown, (metadata) => ({
       ...metadata,
-      updated: this.clock.now().toISOString()
+      updated: this.clock.now().toISOString(),
+      saveFailed: undefined
     }));
     const note = parseNoteMarkdown(editSession.path, updatedMarkdown);
 
-    await this.gateway.commitChanges(`Update note: ${note.title}`, [
-      {
-        type: "write",
-        path: editSession.path,
-        content: updatedMarkdown
-      }
-    ]);
-    await this.reloadActiveNotes();
+    try {
+      await this.gateway.commitChanges(`Update note: ${note.title}`, [
+        {
+          type: "write",
+          path: editSession.path,
+          content: updatedMarkdown
+        }
+      ]);
+      await this.reloadActiveNotes();
+    } catch (error) {
+      const failedMarkdown = this.markSaveFailed(updatedMarkdown);
+      await this.workingCopy.writeLocalNote(parseNoteMarkdown(editSession.path, failedMarkdown));
+      console.error(`Failed to update note '${id}' in GitHub.`, error);
+      return { noteId: id, saveFailed: true };
+    }
 
     return { noteId: id };
   }
@@ -129,10 +159,8 @@ export class NotesService {
     }));
     const updatedNote = parseNoteMarkdown(note.path, markdown);
 
-    await this.gateway.commitChanges(`${request.pinned ? "Pin" : "Unpin"} note: ${updatedNote.title}`, [
-      { type: "write", path: note.path, content: markdown }
-    ]);
-    await this.reloadActiveNotes();
+    await this.workingCopy.writeLocalNote(updatedNote);
+    void this.commitPinChangeInBackground(id, request.pinned, updatedNote);
 
     return { noteId: id };
   }
@@ -218,6 +246,23 @@ export class NotesService {
       conflictNoteId: conflictNote.id,
       message: "The original note changed in GitHub. The original was left unchanged and a conflict copy was created."
     };
+  }
+
+  private async commitPinChangeInBackground(id: string, pinned: boolean, note: Note): Promise<void> {
+    try {
+      await this.gateway.commitChanges(`${pinned ? "Pin" : "Unpin"} note: ${note.title}`, [{ type: "write", path: note.path, content: note.markdown }]);
+      const remoteFile = await this.gateway.readMarkdownFile(note.path);
+      await this.workingCopy.updateFileSha(id, remoteFile.sha);
+    } catch (error) {
+      console.error(`Failed to ${pinned ? "pin" : "unpin"} note '${id}' in GitHub.`, error);
+    }
+  }
+
+  private markSaveFailed(markdown: string): string {
+    return updateMarkdownMetadata(markdown, (metadata) => ({
+      ...metadata,
+      saveFailed: true
+    }));
   }
 
   private async ensureLoaded(): Promise<void> {

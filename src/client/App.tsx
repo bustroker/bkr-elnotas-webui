@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ButtonHTMLAttributes, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { Check, CornerUpLeft, Edit3, Info, Menu, Pin, PinOff, Plus, RefreshCw, RotateCcw, Trash2, Unplug, X } from "lucide-react";
 import {
   ApiRequestError,
@@ -55,6 +55,7 @@ export function App() {
   const [pwaUpdateReady, setPwaUpdateReady] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [openHelpId, setOpenHelpId] = useState<string | null>(null);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -97,12 +98,26 @@ export function App() {
 
     const timeoutId = window.setTimeout(() => {
       setOpenHelpId(null);
-    }, 5000);
+    }, 3000);
 
     return () => {
       window.clearTimeout(timeoutId);
     };
   }, [openHelpId]);
+
+  useEffect(() => {
+    if (toast === null) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setToast(null);
+    }, 3000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [toast]);
 
   const tags = useMemo(() => {
     return [...new Set(notes.flatMap((note) => note.tags))].sort((left, right) => left.localeCompare(right));
@@ -117,6 +132,7 @@ export function App() {
     });
   }, [notes, tagFilter, textFilter]);
   const canCreateNote = createTitle.trim().length > 0;
+  const repositoryLabel = user.config?.repository ?? user.username;
 
   async function initialize(): Promise<void> {
     await run("Loading session", async () => {
@@ -155,6 +171,19 @@ export function App() {
     });
   }
 
+  async function beginEditById(id: string): Promise<void> {
+    await run("Opening editor", async () => {
+      const note = await getNote(id);
+      const response = await startEditSession(note.id);
+      setActiveNote(response.note);
+      setEditTitle(response.note.title);
+      setEditTags(response.note.tags.join(", "));
+      setEditBody(response.note.body);
+      setEditSessionId(response.editSessionId);
+      setModalMode("edit");
+    });
+  }
+
   async function saveEdit(): Promise<void> {
     if (activeNote === null || editSessionId === null) {
       return;
@@ -171,13 +200,15 @@ export function App() {
         editSessionId
       });
       setNotes(await listNotes());
-      setActiveNote(result.noteId === undefined ? null : await getNote(result.noteId));
+      setActiveNote(null);
       setModalMode("read");
       setEditSessionId(null);
-      if (result.conflict !== undefined) {
-        setToast({ tone: "error", message: result.conflict.message });
+      if (result.saveFailed === true) {
+        setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
+      } else if (result.conflict !== undefined) {
+        setToast({ tone: "error", message: `${result.conflict.message} Review both notes, consolidate them into one, and remove the duplicate.` });
       } else {
-        setToast({ tone: "success", message: "Note saved." });
+        setToast(null);
       }
     });
   }
@@ -191,14 +222,16 @@ export function App() {
         tags: parseTags(createTags)
       });
       setNotes(await listNotes());
-      if (result.noteId !== undefined) {
-        setActiveNote(await getNote(result.noteId));
-        setModalMode("read");
-      }
+      setActiveNote(null);
+      setModalMode("read");
       setCreateTitle("");
       setCreateTags("");
       setCreateBody("");
-      setToast({ tone: "success", message: "Note created." });
+      if (result.saveFailed === true) {
+        setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
+      } else {
+        setToast(null);
+      }
     } catch (error) {
       setActiveNote(null);
       setModalMode("read");
@@ -216,10 +249,37 @@ export function App() {
   }
 
   async function togglePin(note: NoteSummary): Promise<void> {
-    await run("Updating pin", async () => {
-      await pinNote(note.id, !note.pinned);
+    const pinned = !note.pinned;
+    const optimisticUpdated = new Date().toISOString();
+    const previousNotes = notes;
+    setNotes((currentNotes) =>
+      sortClientNotes(
+        currentNotes.map((currentNote) =>
+          currentNote.id === note.id
+            ? {
+                ...currentNote,
+                pinned,
+                updated: optimisticUpdated
+              }
+            : currentNote
+        )
+      )
+    );
+
+    try {
+      await pinNote(note.id, pinned);
       setNotes(await listNotes());
-    });
+    } catch (error) {
+      setNotes(previousNotes);
+      if (error instanceof ApiRequestError && error.code === "not_authenticated") {
+        clearSignedInState();
+        setToast({ tone: "error", message: "Your session expired. Sign in with GitHub again." });
+        return;
+      }
+
+      const message = error instanceof Error ? error.message : "Updating pin failed.";
+      setToast({ tone: "error", message });
+    }
   }
 
   async function trashActiveNote(): Promise<void> {
@@ -265,13 +325,7 @@ export function App() {
   }
 
   async function resetLocalNotesAccess(): Promise<void> {
-    const confirmed = window.confirm(
-      "Disconnect this browser from the GitHub notes repository? You can sign in again later. This will not change permissions in GitHub."
-    );
-    if (!confirmed) {
-      return;
-    }
-
+    setResetConfirmOpen(false);
     await run("Resetting notes access", async () => {
       await resetNotesAccess();
       clearSignedInState();
@@ -346,11 +400,11 @@ export function App() {
   }
 
   return (
-    <main className="appShell">
+    <main className="appShell" onClick={hideToastFromButtonClick}>
       <header className="topBar">
         <div>
           <h1>El Notas</h1>
-          <p>{user.username}</p>
+          <p>{repositoryLabel}</p>
         </div>
         <div className="topActions">
           {viewMode === "trash" ? (
@@ -414,7 +468,7 @@ export function App() {
                     <HelpAction
                       type="button"
                       actionClassName="menuAction dangerButton"
-                      onClick={() => runMenuAction(() => void resetLocalNotesAccess())}
+                      onClick={() => runMenuAction(() => setResetConfirmOpen(true))}
                       disabled={isBusy}
                       help="Disconnect this browser from the GitHub notes repository. You can sign in again later."
                       helpId="reset-access"
@@ -445,6 +499,30 @@ export function App() {
         </div>
       )}
 
+      {resetConfirmOpen && (
+        <div className="modalBackdrop">
+          <section className="confirmModal">
+            <div className="modalHeader">
+              <h2>Disconnect notes repository?</h2>
+              <button type="button" className="iconButton subtleCloseButton" onClick={() => setResetConfirmOpen(false)} aria-label="Close">
+                <X aria-hidden="true" size={22} />
+              </button>
+            </div>
+            <p>
+              This disconnects this browser from the GitHub notes repository. It does not change permissions in GitHub, and you can sign in again later.
+            </p>
+            <div className="modalActions">
+              <button type="button" onClick={() => setResetConfirmOpen(false)}>
+                Cancel
+              </button>
+              <button type="button" className="dangerButton" onClick={() => void resetLocalNotesAccess()} disabled={isBusy}>
+                Disconnect
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {viewMode === "notes" && (
         <>
           <section className="filters">
@@ -461,12 +539,17 @@ export function App() {
 
           <section className="cardGrid">
             {filteredNotes.map((note) => (
-              <article key={note.id} className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""}`}>
+              <article
+                key={note.id}
+                className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""} ${note.saveFailed ? "noteSaveFailed" : ""}`}
+              >
                 <button type="button" className="cardBodyButton" onClick={() => void openNote(note.id)}>
                   <div className="cardHeader">
                     <h2>{note.title}</h2>
                     <time>{formatDate(note.updated)}</time>
                   </div>
+                  {note.saveFailed && <p className="statusBadge">Save failed</p>}
+                  {note.conflict && <p className="statusBadge">Conflict</p>}
                   {note.excerpt.length > 0 ? (
                     <div className="cardMarkdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(note.excerpt) }} />
                   ) : (
@@ -481,6 +564,9 @@ export function App() {
                 <div className="cardActions">
                   <button type="button" className="iconButton pinButton" onClick={() => void togglePin(note)} aria-label={note.pinned ? "Unpin note" : "Pin note"}>
                     {note.pinned ? <PinOff aria-hidden="true" size={18} /> : <Pin aria-hidden="true" size={18} />}
+                  </button>
+                  <button type="button" className="iconButton" onClick={() => void beginEditById(note.id)} aria-label="Edit note">
+                    <Edit3 aria-hidden="true" size={18} />
                   </button>
                   <button type="button" className="iconButton dangerButton cardTrashButton" onClick={() => void trashNote(note.id)} aria-label="Move note to trash">
                     <Trash2 aria-hidden="true" size={18} />
@@ -545,7 +631,7 @@ export function App() {
           <section className="noteModal">
             <div className="modalHeader">
               <h2>New note</h2>
-              <button type="button" className="iconButton" onClick={() => setModalMode("read")} aria-label="Close">
+              <button type="button" className="iconButton subtleCloseButton" onClick={() => setModalMode("read")} aria-label="Close">
                 <X aria-hidden="true" size={22} />
               </button>
             </div>
@@ -572,6 +658,12 @@ export function App() {
       )}
     </main>
   );
+
+  function hideToastFromButtonClick(event: MouseEvent<HTMLElement>): void {
+    if (toast !== null && event.target instanceof Element && event.target.closest("button,[role='button']") !== null) {
+      setToast(null);
+    }
+  }
 }
 
 function NoteModal(props: {
@@ -588,12 +680,27 @@ function NoteModal(props: {
   readonly onSave: () => void;
   readonly onTrash: () => void;
 }) {
+  function closeFromBackdrop(event: MouseEvent<HTMLDivElement>): void {
+    if (props.mode === "read" && event.target === event.currentTarget) {
+      props.onClose();
+    }
+  }
+
   return (
-    <div className="modalBackdrop">
-      <section className={`noteModal ${props.note.conflict ? "modalConflict" : ""}`}>
+    <div className="modalBackdrop" onClick={closeFromBackdrop}>
+      <section className={`noteModal ${props.note.conflict ? "modalConflict" : ""} ${props.note.saveFailed ? "modalSaveFailed" : ""}`}>
         <div className="modalHeader">
-          {props.mode === "edit" ? <h2>Edit note</h2> : <h2>{props.note.title}</h2>}
-          <button type="button" className="iconButton" onClick={props.onClose} aria-label="Close">
+          <div className="modalTitleBlock">
+            {props.mode === "edit" ? <h2>Edit note</h2> : <h2>{props.note.title}</h2>}
+            {props.mode === "read" && props.note.tags.length > 0 && (
+              <div className="modalTagRow">
+                {props.note.tags.map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </div>
+            )}
+          </div>
+          <button type="button" className="iconButton subtleCloseButton" onClick={props.onClose} aria-label="Close">
             <X aria-hidden="true" size={22} />
           </button>
         </div>
@@ -641,20 +748,31 @@ function HelpAction({ help, helpId, actionClassName, children, openHelpId, onTog
   readonly onToggleHelp: (helpId: string) => void;
 }) {
   const isHelpOpen = openHelpId === helpId;
+  function toggleFromKeyboard(event: KeyboardEvent<HTMLSpanElement>): void {
+    if (event.key !== "Enter" && event.key !== " ") {
+      return;
+    }
+
+    event.preventDefault();
+    onToggleHelp(helpId);
+  }
+
   return (
     <div className="helpAction">
       <button {...props} className={actionClassName}>
         {children}
       </button>
-      <button
-        type="button"
-        className="helpButton"
+      <span
+        role="button"
+        tabIndex={0}
+        className="helpIconControl"
         onClick={() => onToggleHelp(helpId)}
+        onKeyDown={toggleFromKeyboard}
         aria-expanded={isHelpOpen}
         aria-label="Show help"
       >
         <Info aria-hidden="true" size={20} strokeWidth={2.4} />
-      </button>
+      </span>
       {isHelpOpen && (
         <div className="helpPopover" role="status">
           {help}
@@ -682,6 +800,24 @@ function buildNoteMarkdown(note: Pick<Note, "title" | "date" | "updated" | "tags
   ].filter((line): line is string => line !== null);
 
   return `---\n${metadata.join("\n")}\n---\n\n${note.body.trimStart()}`.trimEnd() + "\n";
+}
+
+function sortClientNotes(notes: readonly NoteSummary[]): readonly NoteSummary[] {
+  return [...notes].sort((left, right) => {
+    if (left.saveFailed !== right.saveFailed) {
+      return left.saveFailed ? -1 : 1;
+    }
+
+    if (left.conflict !== right.conflict) {
+      return left.conflict ? -1 : 1;
+    }
+
+    if (left.pinned !== right.pinned) {
+      return left.pinned ? -1 : 1;
+    }
+
+    return Date.parse(right.updated) - Date.parse(left.updated);
+  });
 }
 
 function formatDate(value: string): string {

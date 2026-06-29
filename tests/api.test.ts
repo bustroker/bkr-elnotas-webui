@@ -83,6 +83,7 @@ function fakeNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
     tags: ["test"],
     pinned: false,
     conflict: false,
+    saveFailed: false,
     excerpt: "Body",
     searchableText: "One Body",
     body: "Body",

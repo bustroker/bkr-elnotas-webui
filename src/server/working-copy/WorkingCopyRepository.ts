@@ -18,6 +18,8 @@ export class WorkingCopyRepository {
   }
 
   public async replaceAll(remoteFiles: readonly RemoteMarkdownFile[]): Promise<void> {
+    const localFailedNotes = (await this.listNotes().catch(() => [])).filter((note) => note.saveFailed);
+    const previousMetadata = await this.readSyncMetadata();
     await rm(this.notesRoot(), { recursive: true, force: true });
     await mkdir(this.notesRoot(), { recursive: true });
 
@@ -27,6 +29,14 @@ export class WorkingCopyRepository {
       metadata.files[this.idFromPath(file.path)] = {
         path: file.path,
         sha: file.sha
+      };
+    }
+
+    for (const note of localFailedNotes) {
+      await this.writeMarkdownFile(note.path, note.markdown);
+      metadata.files[note.id] = {
+        path: note.path,
+        sha: previousMetadata.files[note.id]?.sha ?? null
       };
     }
 
@@ -55,7 +65,7 @@ export class WorkingCopyRepository {
     return parseNoteMarkdown(entry.path, await this.readMarkdownFile(entry.path));
   }
 
-  public async getFileSha(id: string): Promise<string> {
+  public async getFileSha(id: string): Promise<string | null> {
     const metadata = await this.readSyncMetadata();
     const entry = metadata.files[id];
     if (entry === undefined) {
@@ -71,6 +81,31 @@ export class WorkingCopyRepository {
     metadata.files[this.idFromPath(file.path)] = {
       path: file.path,
       sha: file.sha
+    };
+    await this.writeSyncMetadata(metadata);
+  }
+
+  public async writeLocalNote(note: Note): Promise<void> {
+    const metadata = await this.readSyncMetadata();
+    await this.writeMarkdownFile(note.path, note.markdown);
+    const id = this.idFromPath(note.path);
+    metadata.files[id] = {
+      path: note.path,
+      sha: metadata.files[id]?.sha ?? null
+    };
+    await this.writeSyncMetadata(metadata);
+  }
+
+  public async updateFileSha(id: string, sha: string): Promise<void> {
+    const metadata = await this.readSyncMetadata();
+    const entry = metadata.files[id];
+    if (entry === undefined) {
+      return;
+    }
+
+    metadata.files[id] = {
+      ...entry,
+      sha
     };
     await this.writeSyncMetadata(metadata);
   }
