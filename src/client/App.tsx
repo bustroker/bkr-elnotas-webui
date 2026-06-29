@@ -131,6 +131,9 @@ export function App() {
       return matchesTag && matchesText;
     });
   }, [notes, tagFilter, textFilter]);
+  const attentionNotes = useMemo(() => filteredNotes.filter((note) => note.saveFailed || note.conflict), [filteredNotes]);
+  const pinnedNotes = useMemo(() => filteredNotes.filter((note) => note.pinned && !note.saveFailed && !note.conflict), [filteredNotes]);
+  const normalNotes = useMemo(() => filteredNotes.filter((note) => !note.pinned && !note.saveFailed && !note.conflict), [filteredNotes]);
   const canCreateNote = createTitle.trim().length > 0;
   const repositoryLabel = user.config?.repository ?? user.username;
 
@@ -537,43 +540,10 @@ export function App() {
             <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Search notes" />
           </section>
 
-          <section className="cardGrid">
-            {filteredNotes.map((note) => (
-              <article
-                key={note.id}
-                className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""} ${note.saveFailed ? "noteSaveFailed" : ""}`}
-              >
-                <button type="button" className="cardBodyButton" onClick={() => void openNote(note.id)}>
-                  <div className="cardHeader">
-                    <h2>{note.title}</h2>
-                    <time>{formatDate(note.updated)}</time>
-                  </div>
-                  {note.saveFailed && <p className="statusBadge">Save failed</p>}
-                  {note.conflict && <p className="statusBadge">Conflict</p>}
-                  {note.excerpt.length > 0 ? (
-                    <div className="cardMarkdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(note.excerpt) }} />
-                  ) : (
-                    <p>No content</p>
-                  )}
-                  <div className="tagRow">
-                    {note.tags.map((tag) => (
-                      <span key={tag}>{tag}</span>
-                    ))}
-                  </div>
-                </button>
-                <div className="cardActions">
-                  <button type="button" className="iconButton pinButton" onClick={() => void togglePin(note)} aria-label={note.pinned ? "Unpin note" : "Pin note"}>
-                    {note.pinned ? <PinOff aria-hidden="true" size={18} /> : <Pin aria-hidden="true" size={18} />}
-                  </button>
-                  <button type="button" className="iconButton" onClick={() => void beginEditById(note.id)} aria-label="Edit note">
-                    <Edit3 aria-hidden="true" size={18} />
-                  </button>
-                  <button type="button" className="iconButton dangerButton cardTrashButton" onClick={() => void trashNote(note.id)} aria-label="Move note to trash">
-                    <Trash2 aria-hidden="true" size={18} />
-                  </button>
-                </div>
-              </article>
-            ))}
+          <section className="cardGroups" aria-label="Notes">
+            {attentionNotes.length > 0 && <div className="cardGrid">{attentionNotes.map((note) => renderNoteCard(note))}</div>}
+            {pinnedNotes.length > 0 && <div className="cardGrid">{pinnedNotes.map((note) => renderNoteCard(note))}</div>}
+            {normalNotes.length > 0 && <div className="cardGrid">{normalNotes.map((note) => renderNoteCard(note))}</div>}
           </section>
         </>
       )}
@@ -663,6 +633,45 @@ export function App() {
     if (toast !== null && event.target instanceof Element && event.target.closest("button,[role='button']") !== null) {
       setToast(null);
     }
+  }
+
+  function renderNoteCard(note: NoteSummary): ReactNode {
+    return (
+      <article
+        key={note.id}
+        className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""} ${note.saveFailed ? "noteSaveFailed" : ""}`}
+      >
+        <button type="button" className="cardBodyButton" onClick={() => void openNote(note.id)}>
+          <div className="cardHeader">
+            <h2>{note.title}</h2>
+            <time>{formatDate(note.updated)}</time>
+          </div>
+          {note.saveFailed && <p className="statusBadge">Save failed</p>}
+          {note.conflict && <p className="statusBadge">Conflict</p>}
+          {note.excerpt.length > 0 ? (
+            <div className="cardMarkdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(note.excerpt) }} />
+          ) : (
+            <p>No content</p>
+          )}
+          <div className="tagRow">
+            {note.tags.map((tag) => (
+              <span key={tag}>{tag}</span>
+            ))}
+          </div>
+        </button>
+        <div className="cardActions">
+          <button type="button" className="iconButton pinButton" onClick={() => void togglePin(note)} aria-label={note.pinned ? "Unpin note" : "Pin note"}>
+            {note.pinned ? <PinOff aria-hidden="true" size={18} /> : <Pin aria-hidden="true" size={18} />}
+          </button>
+          <button type="button" className="iconButton" onClick={() => void beginEditById(note.id)} aria-label="Edit note">
+            <Edit3 aria-hidden="true" size={18} />
+          </button>
+          <button type="button" className="iconButton dangerButton cardTrashButton" onClick={() => void trashNote(note.id)} aria-label="Move note to trash">
+            <Trash2 aria-hidden="true" size={18} />
+          </button>
+        </div>
+      </article>
+    );
   }
 }
 
