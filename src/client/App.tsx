@@ -22,6 +22,8 @@ import type { Note, NoteSummary, UserState } from "./types";
 
 type ViewMode = "notes" | "trash";
 type ModalMode = "read" | "edit" | "create";
+const toastAutoDismissMs = 5000;
+const toastFadeOutMs = 250;
 
 interface HelpActionProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly help: string;
@@ -47,6 +49,7 @@ export function App() {
   const [tagFilter, setTagFilter] = useState("");
   const [textFilter, setTextFilter] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
+  const [isToastLeaving, setIsToastLeaving] = useState(false);
   const [isBusy, setIsBusy] = useState(false);
   const [pwaUpdateReady, setPwaUpdateReady] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
@@ -103,19 +106,26 @@ export function App() {
 
   useEffect(() => {
     if (toast === null) {
+      setIsToastLeaving(false);
       return;
     }
+
+    setIsToastLeaving(false);
 
     if (!shouldAutoDismissToast(toast)) {
       return;
     }
 
-    const timeoutId = window.setTimeout(() => {
+    const fadeTimeoutId = window.setTimeout(() => {
+      setIsToastLeaving(true);
+    }, toastAutoDismissMs);
+    const removeTimeoutId = window.setTimeout(() => {
       setToast(null);
-    }, 5000);
+    }, toastAutoDismissMs + toastFadeOutMs);
 
     return () => {
-      window.clearTimeout(timeoutId);
+      window.clearTimeout(fadeTimeoutId);
+      window.clearTimeout(removeTimeoutId);
     };
   }, [toast]);
 
@@ -488,7 +498,7 @@ export function App() {
       </header>
 
       {toast !== null && (
-        <div className={`toast toast-${toast.tone}`}>
+        <div className={`toast toast-${toast.tone} ${isToastLeaving ? "toastLeaving" : ""}`}>
           <span>{toast.message}</span>
           <button type="button" className="iconButton buttonSubtle" onClick={() => setToast(null)} aria-label="Close message">
             <X aria-hidden="true" size={20} />
@@ -630,8 +640,15 @@ export function App() {
       event.target instanceof Element &&
       event.target.closest("button,[role='button']") !== null
     ) {
-      setToast(null);
+      dismissTemporaryToast();
     }
+  }
+
+  function dismissTemporaryToast(): void {
+    setIsToastLeaving(true);
+    window.setTimeout(() => {
+      setToast(null);
+    }, toastFadeOutMs);
   }
 
   function renderNoteCard(note: NoteSummary): ReactNode {

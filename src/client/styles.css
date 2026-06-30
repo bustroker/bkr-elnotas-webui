@@ -476,9 +476,19 @@ button:disabled {
   justify-content: space-between;
   margin: 0 auto 18px;
   max-width: 1180px;
+  opacity: 1;
   padding: 12px 14px;
   position: relative;
+  transform: translateY(0);
+  transition:
+    opacity 250ms ease,
+    transform 250ms ease;
   z-index: 30;
+}
+
+.toastLeaving {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .toast-info {

@@ -203,13 +203,6 @@ means:
 3. Select the repository `bkr-elnotas-notes`.
 4. Confirm the installation.
 
-Do not install it only on the web app repository unless that is also where the markdown notes are stored.
-
-The notes repository must grant:
-
-- Contents: Read and write
-- Metadata: Read-only
-
 If repository permissions are changed after the app is already installed, open:
 
 ```text
