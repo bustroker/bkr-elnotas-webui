@@ -43,7 +43,6 @@ Set environment variables:
 ```env
 NODE_ENV=production
 PORT=10000
-CONFIG_FILE=/etc/secrets/app.json
 GITHUB_APP_ID=<github-app-id>
 GITHUB_APP_CLIENT_ID=<github-app-client-id>
 GITHUB_APP_CLIENT_SECRET=<github-app-client-secret>
@@ -57,7 +56,9 @@ Use the same escaped newline format documented in [README.config.md](README.conf
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
 ```
 
-Add a Render secret file named `app.json`. Render mounts it at `/etc/secrets/app.json`, matching `CONFIG_FILE`.
+Add a Render secret file named `app.json`. Render mounts it at `/etc/secrets/app.json`.
+
+The container image links `config/app.json` to `/etc/secrets/app.json`, so the app still reads its fixed config path: `config/app.json`.
 
 ```json
 {

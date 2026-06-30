@@ -5,7 +5,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      CONFIG_FILE: /app/config/app.json
       NODE_ENV: production
       PORT: "3000"
       GITHUB_APP_ID: ${GITHUB_APP_ID:-}

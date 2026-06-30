@@ -6,14 +6,13 @@ import { createApp } from "./http/createApp.js";
 
 loadDotEnv();
 
-const configFilePath = process.env.CONFIG_FILE ?? "./config/app.json";
 const port = Number(process.env.PORT ?? "3000");
 
 if (!Number.isInteger(port) || port < 1 || port > 65535) {
   throw new Error("PORT must be an integer between 1 and 65535.");
 }
 
-const config = await loadConfig(configFilePath);
+const config = await loadConfig("./config/app.json");
 const secrets = loadSecrets(process.env);
 const app = await createApp({
   config,

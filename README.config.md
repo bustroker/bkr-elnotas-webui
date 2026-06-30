@@ -256,13 +256,14 @@ GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVA
 SESSION_SECRET=<generated-random-value>
 ```
 
-For local execution, keep these runtime values unless you need a different port or config file:
+For local execution, keep these runtime values unless you need a different port:
 
 ```env
 PORT=3000
 NODE_ENV=development
-CONFIG_FILE=./config/app.json
 ```
+
+The app always reads non-secret app configuration from `config/app.json`.
 
 ## Runtime Files
 
