@@ -130,7 +130,7 @@ GITHUB_APP_ID=<app-id>
 GITHUB_APP_CLIENT_ID=<client-id>
 ```
 
-Generate a client secret:
+### Generate a client secret:
 
 ```text
 Client secrets -> Generate a new client secret
@@ -144,7 +144,7 @@ GITHUB_APP_CLIENT_SECRET=<generated-client-secret>
 
 If the value is lost, generate a new client secret and update `.env`.
 
-Generate a private key:
+### Generate a private key:
 
 ```text
 General -> Private keys -> Generate a private key
@@ -162,7 +162,7 @@ Put the full output in `.env` with double quotes:
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----\n"
 ```
 
-Generate a session secret:
+### Generate a session secret:
 
 ```sh
 openssl rand -base64 48
