@@ -17,8 +17,8 @@ COPY package.json pnpm-lock.yaml ./
 RUN corepack enable && pnpm install --prod --frozen-lockfile
 
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/config/app.json ./config/app.json
 COPY --from=build /app/config/app.example.json ./config/app.example.json
-RUN ln -s /etc/secrets/app.json ./config/app.json
 
 EXPOSE 3000
 

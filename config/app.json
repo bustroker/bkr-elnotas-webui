@@ -1,0 +1,12 @@
+{
+  "notesGitHubRepository": {
+    "account": "bustroker",
+    "repo": "bkr-elnotas-notes",
+    "branch": "main"
+  },
+  "notesFolder": "notes",
+  "trashFolder": "trash",
+  "trashSizeLimit": 10,
+  "localWorkingCopyFolder": "./data/working-copy",
+  "allowedGitHubUsernames": ["bustroker"]
+}

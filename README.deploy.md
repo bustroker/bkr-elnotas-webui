@@ -56,26 +56,7 @@ Use the same escaped newline format documented in [README.config.md](README.conf
 GITHUB_APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\n...\n-----END RSA PRIVATE KEY-----"
 ```
 
-Add a Render secret file named `app.json`. Render mounts it at `/etc/secrets/app.json`.
-
-The container image links `config/app.json` to `/etc/secrets/app.json`, so the app still reads its fixed config path: `config/app.json`.
-
-```json
-{
-  "notesGitHubRepository": {
-    "account": "your-notes-github-account-or-org",
-    "repo": "elnotas-notes",
-    "branch": "main"
-  },
-  "notesFolder": "notes",
-  "trashFolder": "trash",
-  "trashSizeLimit": 10,
-  "localWorkingCopyFolder": "/tmp/bkr-elnotas-webui/working-copy",
-  "allowedGitHubUsernames": ["your-github-username"]
-}
-```
-
-Use `/tmp` for `localWorkingCopyFolder` on Render Free. The folder can disappear after a restart, redeploy, or spin-down; the app reloads notes from GitHub when needed.
+`config/app.json` is included in the image. It contains non-secret app configuration. Render only needs the secret environment variables listed above.
 
 Configure the GitHub App:
 
@@ -145,12 +126,14 @@ Then open the app, log in with GitHub, and use Reload if the working copy has no
 
 ## Updating Config Or Secrets
 
-When `app.json`, GitHub App credentials, or `SESSION_SECRET` change:
+When GitHub App credentials or `SESSION_SECRET` change:
 
 1. Open the Render service.
-2. Edit Environment variables or the `app.json` secret file.
+2. Edit Environment variables.
 3. Save and deploy the service.
 4. Verify `/api/health`.
+
+When `config/app.json` changes, commit it, publish a new image, and deploy that image.
 
 Changing the GitHub App callback URLs is done in GitHub, not in Render.
 

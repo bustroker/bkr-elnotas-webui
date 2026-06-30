@@ -2,20 +2,19 @@
 
 Configure the app before running it locally or deploying it.
 
-## Create Local Files
+## Create Local Secrets File
 
 ```sh
-cp config/app.example.json config/app.json
 cp .env.example .env
 ```
 
-`config/app.json` contains non-secret runtime configuration.
+`config/app.json` contains non-secret runtime configuration and is committed with the app.
 
 `.env` contains secrets and must not be committed.
 
 ## App Config
 
-Edit `config/app.json`:
+The app reads non-secret configuration from `config/app.json`:
 
 ```json
 {
@@ -271,7 +270,6 @@ Ignored local files:
 
 ```text
 .env
-config/app.json
 data/
 dist/
 node_modules/
