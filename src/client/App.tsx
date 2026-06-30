@@ -17,15 +17,11 @@ import {
   updateNote
 } from "./api";
 import { renderMarkdown } from "./markdown";
+import { shouldAutoDismissToast, toastFromError, type Toast } from "./toastPolicy";
 import type { Note, NoteSummary, UserState } from "./types";
 
 type ViewMode = "notes" | "trash";
 type ModalMode = "read" | "edit" | "create";
-
-interface Toast {
-  readonly tone: "info" | "error" | "success";
-  readonly message: string;
-}
 
 interface HelpActionProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly help: string;
@@ -110,9 +106,13 @@ export function App() {
       return;
     }
 
+    if (!shouldAutoDismissToast(toast)) {
+      return;
+    }
+
     const timeoutId = window.setTimeout(() => {
       setToast(null);
-    }, 3000);
+    }, 5000);
 
     return () => {
       window.clearTimeout(timeoutId);
@@ -240,12 +240,10 @@ export function App() {
       setModalMode("read");
       if (error instanceof ApiRequestError && error.code === "not_authenticated") {
         clearSignedInState();
-        setToast({ tone: "error", message: "Your session expired. Sign in with GitHub again." });
         return;
       }
 
-      const message = error instanceof Error ? error.message : "Creating note failed.";
-      setToast({ tone: "error", message });
+      setToast(toastFromError(error, "Creating note failed."));
     } finally {
       setIsBusy(false);
     }
@@ -276,12 +274,10 @@ export function App() {
       setNotes(previousNotes);
       if (error instanceof ApiRequestError && error.code === "not_authenticated") {
         clearSignedInState();
-        setToast({ tone: "error", message: "Your session expired. Sign in with GitHub again." });
         return;
       }
 
-      const message = error instanceof Error ? error.message : "Updating pin failed.";
-      setToast({ tone: "error", message });
+      setToast(toastFromError(error, "Updating pin failed."));
     }
   }
 
@@ -377,12 +373,10 @@ export function App() {
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "not_authenticated") {
         clearSignedInState();
-        setToast({ tone: "error", message: "Your session expired. Sign in with GitHub again." });
         return;
       }
 
-      const message = error instanceof Error ? error.message : `${label} failed.`;
-      setToast({ tone: "error", message });
+      setToast(toastFromError(error, `${label} failed.`));
     } finally {
       setIsBusy(false);
     }
@@ -630,7 +624,12 @@ export function App() {
   );
 
   function hideToastFromButtonClick(event: MouseEvent<HTMLElement>): void {
-    if (toast !== null && event.target instanceof Element && event.target.closest("button,[role='button']") !== null) {
+    if (
+      toast !== null &&
+      shouldAutoDismissToast(toast) &&
+      event.target instanceof Element &&
+      event.target.closest("button,[role='button']") !== null
+    ) {
       setToast(null);
     }
   }
