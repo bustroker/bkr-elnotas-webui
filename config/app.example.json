@@ -8,5 +8,10 @@
   "trashFolder": "trash",
   "trashSizeLimit": 10,
   "localWorkingCopyFolder": "./data/working-copy",
-  "allowedGitHubUsernames": ["your-github-username"]
+  "allowedGitHubUsernames": ["your-github-username"],
+  "keepAlive": {
+    "enabled": false,
+    "url": "",
+    "intervalMinutes": 5
+  }
 }

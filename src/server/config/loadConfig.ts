@@ -37,7 +37,21 @@ function validateConfig(value: unknown): AppConfig {
     trashFolder: requireRelativeFolder(root.trashFolder, "trashFolder"),
     trashSizeLimit: requirePositiveInteger(root.trashSizeLimit, "trashSizeLimit"),
     localWorkingCopyFolder: requireNonEmptyString(root.localWorkingCopyFolder, "localWorkingCopyFolder"),
-    allowedGitHubUsernames: requireStringList(root.allowedGitHubUsernames, "allowedGitHubUsernames")
+    allowedGitHubUsernames: requireStringList(root.allowedGitHubUsernames, "allowedGitHubUsernames"),
+    keepAlive: requireKeepAliveConfig(root.keepAlive)
+  };
+}
+
+function requireKeepAliveConfig(value: unknown) {
+  const keepAlive = requireRecord(value, "keepAlive");
+  const enabled = requireBoolean(keepAlive.enabled, "keepAlive.enabled");
+
+  return {
+    enabled,
+    url: enabled ? requireHttpUrl(keepAlive.url, "keepAlive.url") : optionalString(keepAlive.url),
+    intervalMinutes: enabled
+      ? requirePositiveInteger(keepAlive.intervalMinutes, "keepAlive.intervalMinutes")
+      : optionalPositiveInteger(keepAlive.intervalMinutes, "keepAlive.intervalMinutes")
   };
 }
 
@@ -61,6 +75,27 @@ function requireNonEmptyString(value: unknown, fieldName: string): string {
   return value.trim();
 }
 
+function optionalString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function requireBoolean(value: unknown, fieldName: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new ConfigError(`Config field '${fieldName}' must be a boolean.`);
+  }
+
+  return value;
+}
+
+function requireHttpUrl(value: unknown, fieldName: string): string {
+  const url = requireNonEmptyString(value, fieldName);
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    throw new ConfigError(`Config field '${fieldName}' must be an HTTP URL.`);
+  }
+
+  return url;
+}
+
 function requireRelativeFolder(value: unknown, fieldName: string): string {
   const folder = requireNonEmptyString(value, fieldName);
   if (path.isAbsolute(folder) || folder.includes("..") || folder.includes("\\") || folder.startsWith("/")) {
@@ -76,6 +111,14 @@ function requirePositiveInteger(value: unknown, fieldName: string): number {
   }
 
   return value;
+}
+
+function optionalPositiveInteger(value: unknown, fieldName: string): number {
+  if (value === undefined) {
+    return 1;
+  }
+
+  return requirePositiveInteger(value, fieldName);
 }
 
 function requireStringList(value: unknown, fieldName: string): readonly string[] {

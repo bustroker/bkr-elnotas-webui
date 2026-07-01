@@ -13,6 +13,11 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     trashSizeLimit: 2,
     localWorkingCopyFolder: "./data/test-working-copy",
     allowedGitHubUsernames: ["alice"],
+    keepAlive: {
+      enabled: false,
+      url: "",
+      intervalMinutes: 5
+    },
     ...overrides
   };
 }

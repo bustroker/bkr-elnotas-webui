@@ -27,7 +27,12 @@ The app reads non-secret configuration from `config/app.json`:
   "trashFolder": "trash",
   "trashSizeLimit": 10,
   "localWorkingCopyFolder": "./data/working-copy",
-  "allowedGitHubUsernames": ["your-github-username"]
+  "allowedGitHubUsernames": ["your-github-username"],
+  "keepAlive": {
+    "enabled": false,
+    "url": "",
+    "intervalMinutes": 5
+  }
 }
 ```
 
@@ -48,6 +53,32 @@ The app reads non-secret configuration from `config/app.json`:
 `localWorkingCopyFolder` is where the backend stores its local working copy.
 
 `allowedGitHubUsernames` is the login whitelist for people who may use this web app.
+
+`keepAlive` configures an optional backend ping that can help keep free hosting services awake.
+
+`keepAlive.enabled` turns the periodic request on or off.
+
+`keepAlive.url` is the URL the backend requests periodically when keep-alive is enabled. For Render, use the public app URL, usually:
+
+```text
+https://<render-service-name>.onrender.com/api/health
+```
+
+`keepAlive.intervalMinutes` is the number of minutes between requests. The initial recommended value is `5`.
+
+Example enabled config:
+
+```json
+{
+  "keepAlive": {
+    "enabled": true,
+    "url": "https://<render-service-name>.onrender.com/api/health",
+    "intervalMinutes": 5
+  }
+}
+```
+
+The keep-alive request does not validate health content. Its purpose is only to send a periodic HTTP request. Failed requests are logged as warnings and do not stop the app.
 
 ## Notes Repository Setup
 

@@ -3,6 +3,7 @@ import { loadConfig } from "./config/loadConfig.js";
 import { loadDotEnv } from "./env/loadDotEnv.js";
 import { loadSecrets } from "./env/loadSecrets.js";
 import { createApp } from "./http/createApp.js";
+import { KeepAlivePinger } from "./runtime/KeepAlivePinger.js";
 
 loadDotEnv();
 
@@ -19,5 +20,15 @@ const app = await createApp({
   secrets,
   clientDistPath: path.resolve("dist/client")
 });
+const keepAlivePinger = new KeepAlivePinger({
+  config: config.keepAlive,
+  fetch,
+  logger: app.log
+});
+
+app.addHook("onClose", () => {
+  keepAlivePinger.stop();
+});
 
 await app.listen({ port, host: "0.0.0.0" });
+keepAlivePinger.start();

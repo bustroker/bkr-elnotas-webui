@@ -16,6 +16,9 @@ export interface AppConfig {
 
   /** GitHub usernames allowed to log into and use this web app. */
   readonly allowedGitHubUsernames: readonly string[];
+
+  /** Optional backend keep-alive request used to reduce hosting provider idle shutdowns. */
+  readonly keepAlive: KeepAliveConfig;
 }
 
 export interface NotesGitHubRepositoryConfig {
@@ -27,4 +30,15 @@ export interface NotesGitHubRepositoryConfig {
 
   /** Git branch used for all note read/write operations. */
   readonly branch: string;
+}
+
+export interface KeepAliveConfig {
+  /** Enables the periodic backend request when true. */
+  readonly enabled: boolean;
+
+  /** URL requested periodically by the backend when keep-alive is enabled. */
+  readonly url: string;
+
+  /** Number of minutes between keep-alive requests when enabled. */
+  readonly intervalMinutes: number;
 }
