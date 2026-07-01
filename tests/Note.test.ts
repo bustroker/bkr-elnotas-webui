@@ -15,7 +15,7 @@ function noteWithBody(body: string): Note {
     fileName: "note.md",
     path: "notes/note.md",
     title: "Note",
-    date: "2026-06-25T10:00:00.000Z",
+    created: "2026-06-25T10:00:00.000Z",
     updated: "2026-06-25T10:00:00.000Z",
     tags: [],
     pinned: false,

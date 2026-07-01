@@ -346,6 +346,35 @@ button:disabled {
   margin: 0;
 }
 
+.loadingState,
+.emptyState {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  color: #405067;
+  display: flex;
+  gap: 10px;
+  margin: 0 auto;
+  max-width: 1180px;
+  padding: 18px;
+}
+
+.loadingSpinner {
+  animation: spin 800ms linear infinite;
+  border: 3px solid #d8e0ec;
+  border-top-color: #1c4e80;
+  border-radius: 999px;
+  height: 22px;
+  width: 22px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .noteCard {
   align-self: start;
   display: flex;
@@ -722,7 +751,55 @@ button:disabled {
     width: 56px;
   }
 
+  .cardGroups {
+    gap: 12px;
+  }
+
+  .cardGrid {
+    gap: 10px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .noteCard {
+    min-height: 180px;
+  }
+
+  .cardBodyButton,
+  .trashCardBody {
+    padding: 12px;
+  }
+
+  .cardActions {
+    gap: 6px;
+    margin: 0 12px 12px;
+  }
+
+  .cardHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .cardHeader h2,
+  .trashCardBody h2 {
+    font-size: 16px;
+  }
+
+  .cardMarkdownBody {
+    font-size: 14px;
+  }
+
+  .trashCard .buttonDanger {
+    margin: 0 12px 12px;
+  }
+
   .noteModal {
     max-height: 94vh;
+  }
+}
+
+@media (max-width: 380px) {
+  .cardGrid {
+    grid-template-columns: 1fr;
   }
 }

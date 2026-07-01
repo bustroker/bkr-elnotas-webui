@@ -12,7 +12,7 @@
 ## 2. Markdown Note Model
 
 - Parse and serialize markdown with frontmatter.
-- Manage app-owned fields: `title`, `date`, `updated`, `tags`, `pinned`, and `conflict`.
+- Manage app-owned fields: `title`, `created`, `updated`, `tags`, `pinned`, and `conflict`.
 - Keep `pinned` and `conflict` absent unless they apply.
 - Add note sorting and filtering behavior.
 

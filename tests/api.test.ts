@@ -78,7 +78,7 @@ function fakeNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
     fileName: "one.md",
     path: "notes/one.md",
     title: "One",
-    date: "2026-06-22T10:00:00.000Z",
+    created: "2026-06-22T10:00:00.000Z",
     updated: "2026-06-22T10:00:00.000Z",
     tags: ["test"],
     pinned: false,

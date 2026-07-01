@@ -6,7 +6,7 @@ describe("NoteMarkdown", () => {
     const markdown = serializeNoteMarkdown(
       {
         title: "Title",
-        date: "2026-06-22T10:00:00.000Z",
+        created: "2026-06-22T10:00:00.000Z",
         updated: "2026-06-22T10:00:00.000Z",
         tags: ["a"]
       },
@@ -17,6 +17,9 @@ describe("NoteMarkdown", () => {
     expect(markdown).not.toContain("conflict:");
     expect(markdown).not.toContain("save_failed:");
     expect(markdown).not.toContain("delete_failed:");
+    expect(markdown).toContain("created:");
+    expect(markdown).toContain("2026-06-22T10:00:00.000Z");
+    expect(markdown).not.toContain("date:");
   });
 
   it("reads optional status metadata when present", () => {
@@ -24,7 +27,7 @@ describe("NoteMarkdown", () => {
       "notes/example.md",
       `---
 title: Example
-date: 2026-06-22T10:00:00.000Z
+created: 2026-06-22T10:00:00.000Z
 updated: 2026-06-22T10:00:00.000Z
 tags:
   - a
@@ -42,5 +45,6 @@ Body`
     expect(note.saveFailed).toBe(true);
     expect(note.deleteFailed).toBe(true);
     expect(note.tags).toEqual(["a"]);
+    expect(note.created).toBe("2026-06-22T10:00:00.000Z");
   });
 });

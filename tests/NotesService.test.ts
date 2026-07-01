@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { access, mkdtemp } from "node:fs/promises";
 import path from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
@@ -277,13 +277,14 @@ describe("NotesService", () => {
     await service.resetLocalAccess();
 
     expect(await service.listNotes()).toHaveLength(0);
+    await expect(access(config.localWorkingCopyFolder)).resolves.toBeUndefined();
   });
 });
 
 function noteMarkdown(title: string, body: string): string {
   return `---
 title: "${title}"
-date: 2026-06-22T10:00:00.000Z
+created: 2026-06-22T10:00:00.000Z
 updated: 2026-06-22T10:00:00.000Z
 tags:
   - test

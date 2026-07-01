@@ -3,7 +3,7 @@ import type { Note } from "./Note.js";
 
 export interface NoteMetadata {
   readonly title: string;
-  readonly date: string;
+  readonly created: string;
   readonly updated: string;
   readonly tags: readonly string[];
   readonly pinned?: true;
@@ -22,7 +22,7 @@ export function parseNoteMarkdown(path: string, markdown: string): Note {
     fileName,
     path,
     title: metadata.title,
-    date: metadata.date,
+    created: metadata.created,
     updated: metadata.updated,
     tags: metadata.tags,
     pinned: metadata.pinned === true,
@@ -37,7 +37,7 @@ export function parseNoteMarkdown(path: string, markdown: string): Note {
 export function serializeNoteMarkdown(metadata: NoteMetadata, body: string): string {
   const data: Record<string, unknown> = {
     title: metadata.title,
-    date: metadata.date,
+    created: metadata.created,
     updated: metadata.updated,
     tags: metadata.tags
   };
@@ -76,7 +76,7 @@ export function createNoteMarkdown(input: {
   return serializeNoteMarkdown(
     {
       title: input.title,
-      date: input.nowIso,
+      created: input.nowIso,
       updated: input.nowIso,
       tags: normalizeTags(input.tags)
     },
@@ -87,8 +87,8 @@ export function createNoteMarkdown(input: {
 function normalizeMetadata(value: Record<string, unknown>, path: string): NoteMetadata {
   return {
     title: readString(value.title) ?? titleFromPath(path),
-    date: readString(value.date) ?? new Date(0).toISOString(),
-    updated: readString(value.updated) ?? readString(value.date) ?? new Date(0).toISOString(),
+    created: readDateString(value.created) ?? new Date(0).toISOString(),
+    updated: readDateString(value.updated) ?? readDateString(value.created) ?? new Date(0).toISOString(),
     tags: normalizeTags(readTags(value.tags)),
     pinned: value.pinned === true ? true : undefined,
     conflict: value.conflict === true ? true : undefined,
@@ -120,6 +120,14 @@ function normalizeTags(tags: readonly string[]): readonly string[] {
 
 function readString(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+}
+
+function readDateString(value: unknown): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+
+  return readString(value);
 }
 
 function titleFromPath(path: string): string {

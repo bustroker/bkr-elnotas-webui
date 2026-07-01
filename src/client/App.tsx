@@ -58,6 +58,7 @@ export function App() {
   const [removingNoteIds, setRemovingNoteIds] = useState<ReadonlySet<string>>(new Set());
   const [removingTrashIds, setRemovingTrashIds] = useState<ReadonlySet<string>>(new Set());
   const [isBusy, setIsBusy] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const [pwaUpdateReady, setPwaUpdateReady] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [openHelpId, setOpenHelpId] = useState<string | null>(null);
@@ -160,15 +161,42 @@ export function App() {
   const repositoryLabel = user.config?.repository ?? user.username;
 
   async function initialize(): Promise<void> {
-    await run("Loading session", async () => {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-      if (currentUser.authenticated) {
-        setNotes(await listNotes());
-      }
-    });
+    try {
+      await run("Loading session", async () => {
+        const currentUser = await getCurrentUser();
+        setUser(currentUser);
+        if (currentUser.authenticated) {
+          setNotes(await listNotes());
+        }
+      });
+    } finally {
+      setIsInitialLoading(false);
+    }
   }
 
+  function renderNotesContent(): ReactNode {
+    if (isInitialLoading) {
+      return (
+        <section className="loadingState" aria-live="polite" aria-busy="true">
+          <span className="loadingSpinner" aria-hidden="true" />
+          <span>Loading notes...</span>
+        </section>
+      );
+    }
+
+    return (
+      <section className="cardGroups" aria-label="Notes">
+        {attentionNotes.length > 0 && <div className="cardGrid">{attentionNotes.map((note) => renderNoteCard(note))}</div>}
+        {pinnedNotes.length > 0 && <div className="cardGrid">{pinnedNotes.map((note) => renderNoteCard(note))}</div>}
+        {normalNotes.length > 0 && <div className="cardGrid">{normalNotes.map((note) => renderNoteCard(note))}</div>}
+        {filteredNotes.length === 0 && (
+          <div className="emptyState">
+            {notes.length === 0 ? "No notes yet." : "No notes match the current filters."}
+          </div>
+        )}
+      </section>
+    );
+  }
   async function refreshNotes(): Promise<void> {
     await run("Reloading notes", async () => {
       setNotes(await reloadNotes());
@@ -690,11 +718,7 @@ export function App() {
             <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Search notes" />
           </section>
 
-          <section className="cardGroups" aria-label="Notes">
-            {attentionNotes.length > 0 && <div className="cardGrid">{attentionNotes.map((note) => renderNoteCard(note))}</div>}
-            {pinnedNotes.length > 0 && <div className="cardGrid">{pinnedNotes.map((note) => renderNoteCard(note))}</div>}
-            {normalNotes.length > 0 && <div className="cardGrid">{normalNotes.map((note) => renderNoteCard(note))}</div>}
-          </section>
+          {renderNotesContent()}
         </>
       )}
 
@@ -987,7 +1011,7 @@ function createLocalNote(input: { readonly title: string; readonly body: string;
     fileName,
     path: `notes/${fileName}`,
     title: input.title,
-    date: now,
+    created: now,
     updated: now,
     tags: input.tags,
     pinned: false,
@@ -1013,7 +1037,7 @@ function noteToSummary(note: Note): NoteSummary {
   return {
     id: note.id,
     title: note.title,
-    date: note.date,
+    created: note.created,
     updated: note.updated,
     tags: note.tags,
     pinned: note.pinned,
@@ -1076,10 +1100,10 @@ function parseTags(value: string): readonly string[] {
     .filter((tag) => tag.length > 0);
 }
 
-function buildNoteMarkdown(note: Pick<Note, "title" | "date" | "updated" | "tags" | "pinned" | "conflict" | "saveFailed" | "deleteFailed" | "body">): string {
+function buildNoteMarkdown(note: Pick<Note, "title" | "created" | "updated" | "tags" | "pinned" | "conflict" | "saveFailed" | "deleteFailed" | "body">): string {
   const metadata = [
     `title: ${JSON.stringify(note.title)}`,
-    `date: ${note.date}`,
+    `created: ${note.created}`,
     `updated: ${note.updated}`,
     `tags: [${note.tags.map((tag) => JSON.stringify(tag)).join(", ")}]`,
     note.pinned ? "pinned: true" : null,
@@ -1121,12 +1145,19 @@ function sortClientNotes(notes: readonly NoteSummary[]): readonly NoteSummary[] 
 
 function formatDate(value: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime())
-    ? value
-    : date.toLocaleString(undefined, {
-        dateStyle: "short",
-        timeStyle: "short",
-        hour12: false,
-        hourCycle: "h23"
-      });
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const day = new Intl.DateTimeFormat("en-US", { day: "numeric" }).format(date);
+  const month = new Intl.DateTimeFormat("en-US", { month: "short" }).format(date);
+  const year = new Intl.DateTimeFormat("en-US", { year: "numeric" }).format(date);
+  const time = new Intl.DateTimeFormat("en-GB", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    hourCycle: "h23"
+  }).format(date);
+
+  return `${day} ${month} ${year}, ${time}`;
 }

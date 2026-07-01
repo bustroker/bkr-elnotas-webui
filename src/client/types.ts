@@ -13,7 +13,7 @@ export interface UserState {
 export interface NoteSummary {
   readonly id: string;
   readonly title: string;
-  readonly date: string;
+  readonly created: string;
   readonly updated: string;
   readonly tags: readonly string[];
   readonly pinned: boolean;
