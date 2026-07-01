@@ -16,6 +16,7 @@ describe("NoteMarkdown", () => {
     expect(markdown).not.toContain("pinned:");
     expect(markdown).not.toContain("conflict:");
     expect(markdown).not.toContain("save_failed:");
+    expect(markdown).not.toContain("delete_failed:");
   });
 
   it("reads optional status metadata when present", () => {
@@ -30,6 +31,7 @@ tags:
 pinned: true
 conflict: true
 save_failed: true
+delete_failed: true
 ---
 
 Body`
@@ -38,6 +40,7 @@ Body`
     expect(note.pinned).toBe(true);
     expect(note.conflict).toBe(true);
     expect(note.saveFailed).toBe(true);
+    expect(note.deleteFailed).toBe(true);
     expect(note.tags).toEqual(["a"]);
   });
 });

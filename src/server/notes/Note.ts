@@ -9,6 +9,7 @@ export interface Note {
   readonly pinned: boolean;
   readonly conflict: boolean;
   readonly saveFailed: boolean;
+  readonly deleteFailed: boolean;
   readonly body: string;
   readonly markdown: string;
 }
@@ -22,6 +23,7 @@ export interface NoteSummary {
   readonly pinned: boolean;
   readonly conflict: boolean;
   readonly saveFailed: boolean;
+  readonly deleteFailed: boolean;
   readonly excerpt: string;
   readonly searchableText: string;
 }
@@ -36,6 +38,7 @@ export function toNoteSummary(note: Note): NoteSummary {
     pinned: note.pinned,
     conflict: note.conflict,
     saveFailed: note.saveFailed,
+    deleteFailed: note.deleteFailed,
     excerpt: note.body.trim().slice(0, 220),
     searchableText: `${note.title}\n${note.tags.join(" ")}\n${note.body}`
   };

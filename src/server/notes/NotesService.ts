@@ -55,7 +55,7 @@ export class NotesService {
   public async createNote(request: CreateNoteRequest): Promise<NoteMutationResult> {
     await this.ensureLoaded();
     const nowIso = this.clock.now().toISOString();
-    const fileName = `${timestampSlug(this.clock.now())}-${slugify(request.title)}.md`;
+    const fileName = request.fileName ?? `${timestampSlug(this.clock.now())}-${slugify(request.title)}.md`;
     const filePath = this.activePath(fileName);
     const markdown = createNoteMarkdown({
       title: request.title,
@@ -80,7 +80,7 @@ export class NotesService {
   public async startEditSession(id: string): Promise<{ readonly note: Note; readonly editSessionId: string }> {
     await this.ensureLoaded();
     const note = await this.workingCopy.getNote(id);
-    if (note.saveFailed) {
+    if (note.saveFailed || note.deleteFailed) {
       const editSession = this.editSessions.create({
         noteId: note.id,
         path: note.path,
@@ -126,7 +126,8 @@ export class NotesService {
     const updatedMarkdown = updateMarkdownMetadata(request.markdown, (metadata) => ({
       ...metadata,
       updated: this.clock.now().toISOString(),
-      saveFailed: undefined
+      saveFailed: undefined,
+      deleteFailed: undefined
     }));
     const note = parseNoteMarkdown(editSession.path, updatedMarkdown);
 
@@ -168,25 +169,37 @@ export class NotesService {
   public async sendToTrash(id: string): Promise<NoteMutationResult> {
     await this.ensureLoaded();
     const note = await this.workingCopy.getNote(id);
-    const currentRemoteFile = await this.gateway.readMarkdownFile(note.path);
-    const trashFileName = `${timestampSlug(this.clock.now())}-${note.fileName}`;
-    const trashPath = this.trashPath(trashFileName);
-    const changes: GitHubFileChange[] = [
-      { type: "write", path: trashPath, content: currentRemoteFile.content },
-      { type: "delete", path: note.path }
-    ];
 
-    const trashFiles = await this.gateway.listMarkdownFiles(this.config.trashFolder);
-    if (trashFiles.length >= this.config.trashSizeLimit) {
-      const oldestFiles = [...trashFiles].sort((left, right) => left.path.localeCompare(right.path));
-      const deleteCount = trashFiles.length - this.config.trashSizeLimit + 1;
-      for (const file of oldestFiles.slice(0, deleteCount)) {
-        changes.push({ type: "delete", path: file.path });
+    try {
+      const currentRemoteFile = note.saveFailed ? null : await this.gateway.readMarkdownFile(note.path);
+      if (currentRemoteFile === null) {
+        await this.workingCopy.removeNote(id);
+        return { noteId: id };
       }
-    }
 
-    await this.gateway.commitChanges(`Move note to trash: ${note.title}`, changes);
-    await this.reloadActiveNotes();
+      const trashFileName = `${timestampSlug(this.clock.now())}-${note.fileName}`;
+      const trashPath = this.trashPath(trashFileName);
+      const changes: GitHubFileChange[] = [
+        { type: "write", path: trashPath, content: currentRemoteFile.content },
+        { type: "delete", path: note.path }
+      ];
+      const trashFiles = await this.gateway.listMarkdownFiles(this.config.trashFolder);
+      if (trashFiles.length >= this.config.trashSizeLimit) {
+        const oldestFiles = [...trashFiles].sort((left, right) => left.path.localeCompare(right.path));
+        const deleteCount = trashFiles.length - this.config.trashSizeLimit + 1;
+        for (const file of oldestFiles.slice(0, deleteCount)) {
+          changes.push({ type: "delete", path: file.path });
+        }
+      }
+
+      await this.gateway.commitChanges(`Move note to trash: ${note.title}`, changes);
+      await this.reloadActiveNotes();
+    } catch (error) {
+      const failedMarkdown = this.markDeleteFailed(note.markdown);
+      await this.workingCopy.writeLocalNote(parseNoteMarkdown(note.path, failedMarkdown));
+      console.error(`Failed to move note '${id}' to trash in GitHub.`, error);
+      return { noteId: id, deleteFailed: true };
+    }
 
     return { noteId: id };
   }
@@ -261,7 +274,16 @@ export class NotesService {
   private markSaveFailed(markdown: string): string {
     return updateMarkdownMetadata(markdown, (metadata) => ({
       ...metadata,
-      saveFailed: true
+      saveFailed: true,
+      deleteFailed: undefined
+    }));
+  }
+
+  private markDeleteFailed(markdown: string): string {
+    return updateMarkdownMetadata(markdown, (metadata) => ({
+      ...metadata,
+      deleteFailed: true,
+      saveFailed: undefined
     }));
   }
 

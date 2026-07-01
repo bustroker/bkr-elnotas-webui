@@ -35,7 +35,12 @@ export async function getNote(id: string): Promise<Note> {
   return response.note;
 }
 
-export async function createNote(input: { readonly title: string; readonly body: string; readonly tags: readonly string[] }): Promise<MutationResult> {
+export async function createNote(input: {
+  readonly fileName?: string;
+  readonly title: string;
+  readonly body: string;
+  readonly tags: readonly string[];
+}): Promise<MutationResult> {
   return request<MutationResult>("/api/notes", {
     method: "POST",
     body: JSON.stringify(input)

@@ -22,6 +22,9 @@ import type { Note, NoteSummary, UserState } from "./types";
 
 type ViewMode = "notes" | "trash";
 type ModalMode = "read" | "edit" | "create";
+type LocalNoteInput = Omit<Note, "excerpt" | "searchableText" | "markdown"> & {
+  readonly markdown?: string;
+};
 const toastAutoDismissMs = 5000;
 const toastFadeOutMs = 250;
 
@@ -35,6 +38,7 @@ interface HelpActionProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 export function App() {
   const [user, setUser] = useState<UserState>({ authenticated: false });
   const [notes, setNotes] = useState<readonly NoteSummary[]>([]);
+  const [localNotes, setLocalNotes] = useState<Readonly<Record<string, Note>>>({});
   const [trashNotes, setTrashNotes] = useState<readonly NoteSummary[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("notes");
   const [activeNote, setActiveNote] = useState<Note | null>(null);
@@ -56,6 +60,7 @@ export function App() {
   const [openHelpId, setOpenHelpId] = useState<string | null>(null);
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
+  const localNotesRef = useRef<Readonly<Record<string, Note>>>({});
 
   useEffect(() => {
     const handlePwaUpdate = () => setPwaUpdateReady(true);
@@ -68,6 +73,10 @@ export function App() {
   useEffect(() => {
     void initialize();
   }, []);
+
+  useEffect(() => {
+    localNotesRef.current = localNotes;
+  }, [localNotes]);
 
   useEffect(() => {
     if (!actionsMenuOpen) {
@@ -141,9 +150,9 @@ export function App() {
       return matchesTag && matchesText;
     });
   }, [notes, tagFilter, textFilter]);
-  const attentionNotes = useMemo(() => filteredNotes.filter((note) => note.saveFailed || note.conflict), [filteredNotes]);
-  const pinnedNotes = useMemo(() => filteredNotes.filter((note) => note.pinned && !note.saveFailed && !note.conflict), [filteredNotes]);
-  const normalNotes = useMemo(() => filteredNotes.filter((note) => !note.pinned && !note.saveFailed && !note.conflict), [filteredNotes]);
+  const attentionNotes = useMemo(() => filteredNotes.filter(hasAttentionStatus), [filteredNotes]);
+  const pinnedNotes = useMemo(() => filteredNotes.filter((note) => note.pinned && !hasAttentionStatus(note)), [filteredNotes]);
+  const normalNotes = useMemo(() => filteredNotes.filter((note) => !note.pinned && !hasAttentionStatus(note)), [filteredNotes]);
   const canCreateNote = createTitle.trim().length > 0;
   const repositoryLabel = user.config?.repository ?? user.username;
 
@@ -165,6 +174,14 @@ export function App() {
   }
 
   async function openNote(id: string): Promise<void> {
+    const localNote = localNotes[id];
+    if (localNote !== undefined) {
+      setActiveNote(localNote);
+      setModalMode("read");
+      setEditSessionId(null);
+      return;
+    }
+
     await run("Opening note", async () => {
       setActiveNote(await getNote(id));
       setModalMode("read");
@@ -173,6 +190,12 @@ export function App() {
   }
 
   async function beginEdit(note: Note): Promise<void> {
+    const localNote = localNotes[note.id];
+    if (localNote !== undefined) {
+      openLocalEditor(localNote);
+      return;
+    }
+
     await run("Opening editor", async () => {
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
@@ -185,6 +208,12 @@ export function App() {
   }
 
   async function beginEditById(id: string): Promise<void> {
+    const localNote = localNotes[id];
+    if (localNote !== undefined) {
+      openLocalEditor(localNote);
+      return;
+    }
+
     await run("Opening editor", async () => {
       const note = await getNote(id);
       const response = await startEditSession(note.id);
@@ -198,24 +227,37 @@ export function App() {
   }
 
   async function saveEdit(): Promise<void> {
-    if (activeNote === null || editSessionId === null) {
+    if (activeNote === null) {
       return;
     }
 
-    await run("Saving note", async () => {
-      const result = await updateNote(activeNote.id, {
-        markdown: buildNoteMarkdown({
-          ...activeNote,
-          title: editTitle,
-          tags: parseTags(editTags),
-          body: editBody
-        }),
-        editSessionId
-      });
-      setNotes(await listNotes());
-      setActiveNote(null);
-      setModalMode("read");
-      setEditSessionId(null);
+    const originalNote = activeNote;
+    const updatedNote = buildLocalNote({
+      ...originalNote,
+      title: editTitle,
+      tags: parseTags(editTags),
+      body: editBody,
+      updated: new Date().toISOString(),
+      saveFailed: false,
+      deleteFailed: false
+    });
+
+    setActiveNote(null);
+    setModalMode("read");
+    setEditSessionId(null);
+    setLocalNotes((current) => ({ ...current, [updatedNote.id]: updatedNote }));
+    upsertNoteSummary(noteToSummary(updatedNote));
+    setIsBusy(true);
+    try {
+      const result = localNotes[updatedNote.id] !== undefined && editSessionId === null
+        ? await createNote({ fileName: updatedNote.fileName, title: updatedNote.title, body: updatedNote.body, tags: updatedNote.tags })
+        : await updateNote(updatedNote.id, {
+            markdown: buildNoteMarkdown(updatedNote),
+            editSessionId: editSessionId ?? (await startEditSession(updatedNote.id)).editSessionId
+          });
+
+      await syncNotesFromBackend();
+      setLocalNotes((current) => removeLocalNote(current, updatedNote.id));
       if (result.saveFailed === true) {
         setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
       } else if (result.conflict !== undefined) {
@@ -223,23 +265,47 @@ export function App() {
       } else {
         setToast(null);
       }
-    });
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.code === "not_authenticated") {
+        clearSignedInState();
+        return;
+      }
+
+      const failedNote = buildLocalNote({ ...updatedNote, saveFailed: true, deleteFailed: false });
+      setLocalNotes((current) => ({ ...current, [failedNote.id]: failedNote }));
+      upsertNoteSummary(noteToSummary(failedNote));
+      setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function submitCreate(): Promise<void> {
+    const localNote = createLocalNote({
+      title: createTitle,
+      body: createBody,
+      tags: parseTags(createTags)
+    });
+    setModalMode("read");
+    setCreateTitle("");
+    setCreateTags("");
+    setCreateBody("");
+    setLocalNotes((current) => ({ ...current, [localNote.id]: localNote }));
+    upsertNoteSummary(noteToSummary(localNote));
     setIsBusy(true);
     try {
       const result = await createNote({
-        title: createTitle,
-        body: createBody,
-        tags: parseTags(createTags)
+        fileName: localNote.fileName,
+        title: localNote.title,
+        body: localNote.body,
+        tags: localNote.tags
       });
-      setNotes(await listNotes());
-      setActiveNote(null);
-      setModalMode("read");
-      setCreateTitle("");
-      setCreateTags("");
-      setCreateBody("");
+      const currentLocalNote = localNotesRef.current[localNote.id];
+      if (currentLocalNote?.pinned === true) {
+        await pinNote(localNote.id, true);
+      }
+      await syncNotesFromBackend();
+      setLocalNotes((current) => removeLocalNote(current, localNote.id));
       if (result.saveFailed === true) {
         setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
       } else {
@@ -253,7 +319,10 @@ export function App() {
         return;
       }
 
-      setToast(toastFromError(error, "Creating note failed."));
+      const failedNote = buildLocalNote({ ...localNote, saveFailed: true });
+      setLocalNotes((current) => ({ ...current, [failedNote.id]: failedNote }));
+      upsertNoteSummary(noteToSummary(failedNote));
+      setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
     } finally {
       setIsBusy(false);
     }
@@ -263,6 +332,7 @@ export function App() {
     const pinned = !note.pinned;
     const optimisticUpdated = new Date().toISOString();
     const previousNotes = notes;
+    const localNote = localNotes[note.id];
     setNotes((currentNotes) =>
       sortClientNotes(
         currentNotes.map((currentNote) =>
@@ -276,6 +346,16 @@ export function App() {
         )
       )
     );
+
+    if (localNote !== undefined) {
+      const updatedLocalNote = buildLocalNote({
+        ...localNote,
+        pinned,
+        updated: optimisticUpdated
+      });
+      setLocalNotes((current) => ({ ...current, [updatedLocalNote.id]: updatedLocalNote }));
+      return;
+    }
 
     try {
       await pinNote(note.id, pinned);
@@ -296,17 +376,47 @@ export function App() {
       return;
     }
 
-    await trashNote(activeNote.id);
+    void trashNote(activeNote.id, activeNote);
     setActiveNote(null);
   }
 
-  async function trashNote(id: string): Promise<void> {
-    await run("Sending note to trash", async () => {
-      await sendNoteToTrash(id);
-      setActiveNote(null);
-      setNotes(await listNotes());
-      setToast({ tone: "success", message: "Note moved to trash." });
-    });
+  async function trashNote(id: string, fullNote?: Note): Promise<void> {
+    const localNote = localNotes[id] ?? fullNote;
+    const previousNotes = notes;
+    const previousLocalNotes = localNotes;
+    setActiveNote(null);
+    setNotes((currentNotes) => currentNotes.filter((note) => note.id !== id));
+    setLocalNotes((current) => removeLocalNote(current, id));
+    setIsBusy(true);
+    try {
+      const result = await sendNoteToTrash(id);
+      await syncNotesFromBackend();
+      if (result.deleteFailed === true) {
+        setToast({ tone: "error", message: "Failed to move to trash. Open the note and delete again." });
+      } else {
+        setToast({ tone: "success", message: "Note moved to trash." });
+      }
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.code === "not_authenticated") {
+        clearSignedInState();
+        return;
+      }
+
+      const failedNote = localNote === undefined ? null : buildLocalNote({ ...localNote, deleteFailed: true, saveFailed: false });
+      setNotes(
+        failedNote === null
+          ? sortClientNotes(previousNotes.map((note) => (note.id === id ? { ...note, deleteFailed: true, saveFailed: false } : note)))
+          : sortClientNotes([...previousNotes.filter((note) => note.id !== id), noteToSummary(failedNote)])
+      );
+      setLocalNotes(failedNote === null ? previousLocalNotes : { ...previousLocalNotes, [failedNote.id]: failedNote });
+      setToast({ tone: "error", message: "Failed to move to trash. Open the note and delete again." });
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function syncNotesFromBackend(): Promise<void> {
+    setNotes(await listNotes());
   }
 
   async function openTrash(): Promise<void> {
@@ -361,6 +471,7 @@ export function App() {
   function clearSignedInState(): void {
     setUser({ authenticated: false });
     setNotes([]);
+    setLocalNotes({});
     setTrashNotes([]);
     setActiveNote(null);
     setModalMode("read");
@@ -396,7 +507,7 @@ export function App() {
     return (
       <main className="authScreen">
         <section className="authPanel">
-          <h1>El Notas</h1>
+          <AppBrand />
           {toast !== null && <p className={`authMessage toast-${toast.tone}`}>{toast.message}</p>}
           <a className="button buttonPrimary" href="/auth/github">
             Sign in with GitHub
@@ -410,7 +521,7 @@ export function App() {
     <main className="appShell" onClick={hideToastFromButtonClick}>
       <header className="topBar">
         <div>
-          <h1>El Notas</h1>
+          <AppBrand />
           <p>{repositoryLabel}</p>
         </div>
         <div className="topActions">
@@ -651,11 +762,24 @@ export function App() {
     }, toastFadeOutMs);
   }
 
+  function openLocalEditor(note: Note): void {
+    setActiveNote(note);
+    setEditTitle(note.title);
+    setEditTags(note.tags.join(", "));
+    setEditBody(note.body);
+    setEditSessionId(null);
+    setModalMode("edit");
+  }
+
+  function upsertNoteSummary(note: NoteSummary): void {
+    setNotes((currentNotes) => sortClientNotes([...currentNotes.filter((currentNote) => currentNote.id !== note.id), note]));
+  }
+
   function renderNoteCard(note: NoteSummary): ReactNode {
     return (
       <article
         key={note.id}
-        className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""} ${note.saveFailed ? "noteSaveFailed" : ""}`}
+        className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""} ${note.saveFailed ? "noteSaveFailed" : ""} ${note.deleteFailed ? "noteSaveFailed" : ""}`}
       >
         <button type="button" className="cardBodyButton" onClick={() => void openNote(note.id)}>
           <div className="cardHeader">
@@ -663,6 +787,7 @@ export function App() {
             <time>{formatDate(note.updated)}</time>
           </div>
           {note.saveFailed && <p className="statusBadge">Save failed</p>}
+          {note.deleteFailed && <p className="statusBadge">Delete failed</p>}
           {note.conflict && <p className="statusBadge">Conflict</p>}
           {note.excerpt.length > 0 ? (
             <div className="cardMarkdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(note.excerpt) }} />
@@ -682,7 +807,7 @@ export function App() {
           <button type="button" className="iconButton" onClick={() => void beginEditById(note.id)} aria-label="Edit note">
             <Edit3 aria-hidden="true" size={18} />
           </button>
-          <button type="button" className="iconButton buttonDanger cardTrashButton" onClick={() => void trashNote(note.id)} aria-label="Move note to trash">
+          <button type="button" className="iconButton buttonDanger cardTrashButton" onClick={() => void trashNote(note.id, localNotes[note.id])} aria-label="Move note to trash">
             <Trash2 aria-hidden="true" size={18} />
           </button>
         </div>
@@ -713,7 +838,9 @@ function NoteModal(props: {
 
   return (
     <div className="modalBackdrop" onClick={closeFromBackdrop}>
-      <section className={`noteModal ${props.note.conflict ? "modalConflict" : ""} ${props.note.saveFailed ? "modalSaveFailed" : ""}`}>
+      <section
+        className={`noteModal ${props.note.conflict ? "modalConflict" : ""} ${props.note.saveFailed || props.note.deleteFailed ? "modalSaveFailed" : ""}`}
+      >
         <div className="modalHeader">
           <div className="modalTitleBlock">
             {props.mode === "edit" ? <h2>Edit note</h2> : <h2>{props.note.title}</h2>}
@@ -768,6 +895,15 @@ function NoteModal(props: {
   );
 }
 
+function AppBrand() {
+  return (
+    <div className="appBrand">
+      <img src="/android-chrome-192x192.png" alt="" aria-hidden="true" />
+      <h1>El Notas</h1>
+    </div>
+  );
+}
+
 function HelpAction({ help, helpId, actionClassName, children, openHelpId, onToggleHelp, ...props }: HelpActionProps & {
   readonly openHelpId: string | null;
   readonly onToggleHelp: (helpId: string) => void;
@@ -807,6 +943,85 @@ function HelpAction({ help, helpId, actionClassName, children, openHelpId, onTog
   );
 }
 
+function createLocalNote(input: { readonly title: string; readonly body: string; readonly tags: readonly string[] }): Note {
+  const now = new Date().toISOString();
+  const fileName = createNoteFileName(input.title, new Date(now));
+  const id = fileName.replace(/\.md$/i, "");
+  return buildLocalNote({
+    id,
+    fileName,
+    path: `notes/${fileName}`,
+    title: input.title,
+    date: now,
+    updated: now,
+    tags: input.tags,
+    pinned: false,
+    conflict: false,
+    saveFailed: false,
+    deleteFailed: false,
+    body: input.body,
+    markdown: ""
+  });
+}
+
+function buildLocalNote(note: LocalNoteInput): Note {
+  const markdown = buildNoteMarkdown(note);
+  return {
+    ...note,
+    excerpt: note.body.trim().slice(0, 220),
+    searchableText: `${note.title}\n${note.tags.join(" ")}\n${note.body}`,
+    markdown
+  };
+}
+
+function noteToSummary(note: Note): NoteSummary {
+  return {
+    id: note.id,
+    title: note.title,
+    date: note.date,
+    updated: note.updated,
+    tags: note.tags,
+    pinned: note.pinned,
+    conflict: note.conflict,
+    saveFailed: note.saveFailed,
+    deleteFailed: note.deleteFailed,
+    excerpt: note.body.trim().slice(0, 220),
+    searchableText: `${note.title}\n${note.tags.join(" ")}\n${note.body}`
+  };
+}
+
+function removeLocalNote(notes: Readonly<Record<string, Note>>, id: string): Readonly<Record<string, Note>> {
+  const { [id]: _removed, ...remainingNotes } = notes;
+  return remainingNotes;
+}
+
+function createNoteFileName(title: string, date: Date): string {
+  return `${timestampSlug(date)}-${slugify(title)}-${Math.random().toString(36).slice(2, 8)}.md`;
+}
+
+function slugify(value: string): string {
+  const slug = value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug.length > 0 ? slug : "note";
+}
+
+function timestampSlug(date: Date): string {
+  return date
+    .toISOString()
+    .replace(/[-:]/g, "")
+    .replace(/\.\d{3}Z$/, "")
+    .replace("T", "-");
+}
+
+function hasAttentionStatus(note: Pick<NoteSummary, "saveFailed" | "deleteFailed" | "conflict">): boolean {
+  return note.saveFailed || note.deleteFailed || note.conflict;
+}
+
 function parseTags(value: string): readonly string[] {
   return value
     .split(",")
@@ -814,14 +1029,16 @@ function parseTags(value: string): readonly string[] {
     .filter((tag) => tag.length > 0);
 }
 
-function buildNoteMarkdown(note: Pick<Note, "title" | "date" | "updated" | "tags" | "pinned" | "conflict" | "body">): string {
+function buildNoteMarkdown(note: Pick<Note, "title" | "date" | "updated" | "tags" | "pinned" | "conflict" | "saveFailed" | "deleteFailed" | "body">): string {
   const metadata = [
     `title: ${JSON.stringify(note.title)}`,
     `date: ${note.date}`,
     `updated: ${note.updated}`,
     `tags: [${note.tags.map((tag) => JSON.stringify(tag)).join(", ")}]`,
     note.pinned ? "pinned: true" : null,
-    note.conflict ? "conflict: true" : null
+    note.conflict ? "conflict: true" : null,
+    note.saveFailed ? "save_failed: true" : null,
+    note.deleteFailed ? "delete_failed: true" : null
   ].filter((line): line is string => line !== null);
 
   return `---\n${metadata.join("\n")}\n---\n\n${note.body.trimStart()}`.trimEnd() + "\n";
@@ -829,8 +1046,18 @@ function buildNoteMarkdown(note: Pick<Note, "title" | "date" | "updated" | "tags
 
 function sortClientNotes(notes: readonly NoteSummary[]): readonly NoteSummary[] {
   return [...notes].sort((left, right) => {
+    const leftFailed = hasAttentionStatus(left);
+    const rightFailed = hasAttentionStatus(right);
+    if (leftFailed !== rightFailed) {
+      return leftFailed ? -1 : 1;
+    }
+
     if (left.saveFailed !== right.saveFailed) {
       return left.saveFailed ? -1 : 1;
+    }
+
+    if (left.deleteFailed !== right.deleteFailed) {
+      return left.deleteFailed ? -1 : 1;
     }
 
     if (left.conflict !== right.conflict) {

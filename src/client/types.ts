@@ -19,6 +19,7 @@ export interface NoteSummary {
   readonly pinned: boolean;
   readonly conflict: boolean;
   readonly saveFailed: boolean;
+  readonly deleteFailed: boolean;
   readonly excerpt: string;
   readonly searchableText: string;
 }
@@ -38,6 +39,7 @@ export interface EditSessionResponse {
 export interface MutationResult {
   readonly noteId?: string;
   readonly saveFailed?: true;
+  readonly deleteFailed?: true;
   readonly conflict?: {
     readonly originalNoteId: string;
     readonly conflictNoteId: string;

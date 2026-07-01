@@ -1,4 +1,5 @@
 export interface CreateNoteRequest {
+  readonly fileName?: string;
   readonly title: string;
   readonly body: string;
   readonly tags: readonly string[];
@@ -16,6 +17,7 @@ export interface PinNoteRequest {
 export interface NoteMutationResult {
   readonly noteId?: string;
   readonly saveFailed?: true;
+  readonly deleteFailed?: true;
   readonly conflict?: ConflictResult;
 }
 

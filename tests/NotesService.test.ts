@@ -177,6 +177,29 @@ describe("NotesService", () => {
     expect(notes[0]?.saveFailed).toBe(true);
   });
 
+  it("uses a client-provided safe file name when creating a note", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new MemoryGateway();
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    const result = await service.createNote({
+      fileName: "20260622-103000-local-title-abc123.md",
+      title: "Local title",
+      body: "Body",
+      tags: ["test"]
+    });
+
+    expect(result.noteId).toBe("20260622-103000-local-title-abc123");
+    expect(gateway.files.has("notes/20260622-103000-local-title-abc123.md")).toBe(true);
+  });
+
   it("marks updated notes with save_failed when GitHub save fails", async () => {
     const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
     const gateway = new FailingCommitGateway();
@@ -204,6 +227,31 @@ describe("NotesService", () => {
     expect(result.saveFailed).toBe(true);
     expect(note.saveFailed).toBe(true);
     expect(note.body).toContain("Updated");
+  });
+
+  it("marks notes with delete_failed when moving to trash fails", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new FailingCommitGateway();
+    gateway.files.set("notes/current.md", {
+      path: "notes/current.md",
+      sha: "sha-current",
+      content: noteMarkdown("Current", "Body")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    const result = await service.sendToTrash("current");
+    const note = await service.getNote("current");
+
+    expect(result.deleteFailed).toBe(true);
+    expect(note.deleteFailed).toBe(true);
+    expect(note.body).toContain("Body");
   });
 
   it("resets local access by clearing the working copy and forcing a future reload", async () => {

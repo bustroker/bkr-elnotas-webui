@@ -94,6 +94,23 @@ button:disabled {
   margin: 4px 0 0;
 }
 
+.appBrand {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.appBrand img {
+  display: block;
+  height: 44px;
+  width: 44px;
+}
+
+.authPanel .appBrand img {
+  height: 52px;
+  width: 52px;
+}
+
 .topActions,
 .modalActions,
 .sectionHeader div {

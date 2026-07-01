@@ -1,9 +1,21 @@
 import type { Note, NoteSummary } from "./Note.js";
 
-export function sortNotes<T extends Pick<Note | NoteSummary, "saveFailed" | "conflict" | "pinned" | "updated">>(notes: readonly T[]): readonly T[] {
+export function sortNotes<T extends Pick<Note | NoteSummary, "saveFailed" | "deleteFailed" | "conflict" | "pinned" | "updated">>(
+  notes: readonly T[]
+): readonly T[] {
   return [...notes].sort((left, right) => {
+    const leftFailed = left.saveFailed || left.deleteFailed || left.conflict;
+    const rightFailed = right.saveFailed || right.deleteFailed || right.conflict;
+    if (leftFailed !== rightFailed) {
+      return leftFailed ? -1 : 1;
+    }
+
     if (left.saveFailed !== right.saveFailed) {
       return left.saveFailed ? -1 : 1;
+    }
+
+    if (left.deleteFailed !== right.deleteFailed) {
+      return left.deleteFailed ? -1 : 1;
     }
 
     if (left.conflict !== right.conflict) {

@@ -10,6 +10,7 @@ import type { Note, NoteSummary } from "./Note.js";
 import type { CreateNoteRequest, NoteMutationResult, PinNoteRequest, UpdateNoteRequest } from "./NoteRequests.js";
 
 const createNoteSchema = z.object({
+  fileName: z.string().trim().regex(/^[a-z0-9][a-z0-9-]*\.md$/).optional(),
   title: z.string().trim().min(1),
   body: z.string(),
   tags: z.array(z.string().trim().min(1)).default([])

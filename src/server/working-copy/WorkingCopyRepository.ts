@@ -18,7 +18,7 @@ export class WorkingCopyRepository {
   }
 
   public async replaceAll(remoteFiles: readonly RemoteMarkdownFile[]): Promise<void> {
-    const localFailedNotes = (await this.listNotes().catch(() => [])).filter((note) => note.saveFailed);
+    const localFailedNotes = (await this.listNotes().catch(() => [])).filter((note) => note.saveFailed || note.deleteFailed);
     const previousMetadata = await this.readSyncMetadata();
     await rm(this.notesRoot(), { recursive: true, force: true });
     await mkdir(this.notesRoot(), { recursive: true });
