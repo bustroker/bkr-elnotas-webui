@@ -10,8 +10,8 @@
   "localWorkingCopyFolder": "./data/working-copy",
   "allowedGitHubUsernames": ["bustroker"],
   "keepAlive": {
-    "enabled": false,
-    "url": "",
+    "enabled": true,
+    "url": "https://bkr-elnotas-webui.onrender.com/api/health",
     "intervalMinutes": 5
   }
 }
