@@ -59,8 +59,12 @@ button:disabled {
 }
 
 .authPanel {
-  padding: 28px;
-  width: min(420px, 100%);
+  padding: 36px;
+  width: min(520px, 100%);
+}
+
+.authPanel .buttonPrimary {
+  margin-top: 8px;
 }
 
 .authMessage {
@@ -97,7 +101,7 @@ button:disabled {
 .appBrand {
   align-items: center;
   display: flex;
-  gap: 10px;
+  gap: 14px;
 }
 
 .appBrand img {
@@ -107,8 +111,13 @@ button:disabled {
 }
 
 .authPanel .appBrand img {
-  height: 52px;
-  width: 52px;
+  height: 64px;
+  width: 64px;
+}
+
+.authPanel .appBrand {
+  gap: 18px;
+  margin-bottom: 24px;
 }
 
 .topActions,
@@ -132,6 +141,7 @@ button:disabled {
   display: grid;
   gap: 8px;
   min-width: 270px;
+  max-width: calc(100vw - 40px);
   padding: 10px;
   position: absolute;
   right: 0;
@@ -344,6 +354,24 @@ button:disabled {
   max-height: min(78vh, 840px);
   min-height: 210px;
   overflow: hidden;
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    max-height 220ms ease,
+    min-height 220ms ease,
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.noteRemoving {
+  border-color: #e7edf5;
+  max-height: 0;
+  min-height: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px) scale(0.98);
 }
 
 .notePinned {
@@ -670,7 +698,28 @@ button:disabled {
 
   .topActions,
   .sectionHeader div {
-    justify-content: flex-start;
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .actionsMenuPanel {
+    min-width: min(270px, calc(100vw - 28px));
+    right: 0;
+  }
+
+  .authPanel {
+    padding: 28px;
+  }
+
+  .authPanel .appBrand {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .authPanel .appBrand img {
+    height: 56px;
+    width: 56px;
   }
 
   .noteModal {

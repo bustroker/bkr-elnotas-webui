@@ -27,6 +27,7 @@ type LocalNoteInput = Omit<Note, "excerpt" | "searchableText" | "markdown"> & {
 };
 const toastAutoDismissMs = 5000;
 const toastFadeOutMs = 250;
+const cardRemoveAnimationMs = 220;
 
 interface HelpActionProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly help: string;
@@ -54,6 +55,8 @@ export function App() {
   const [textFilter, setTextFilter] = useState("");
   const [toast, setToast] = useState<Toast | null>(null);
   const [isToastLeaving, setIsToastLeaving] = useState(false);
+  const [removingNoteIds, setRemovingNoteIds] = useState<ReadonlySet<string>>(new Set());
+  const [removingTrashIds, setRemovingTrashIds] = useState<ReadonlySet<string>>(new Set());
   const [isBusy, setIsBusy] = useState(false);
   const [pwaUpdateReady, setPwaUpdateReady] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
@@ -385,8 +388,11 @@ export function App() {
     const previousNotes = notes;
     const previousLocalNotes = localNotes;
     setActiveNote(null);
+    setRemovingNoteIds((current) => new Set(current).add(id));
+    await delay(cardRemoveAnimationMs);
     setNotes((currentNotes) => currentNotes.filter((note) => note.id !== id));
     setLocalNotes((current) => removeLocalNote(current, id));
+    setRemovingNoteIds((current) => removeSetValue(current, id));
     setIsBusy(true);
     try {
       const result = await sendNoteToTrash(id);
@@ -409,6 +415,7 @@ export function App() {
           : sortClientNotes([...previousNotes.filter((note) => note.id !== id), noteToSummary(failedNote)])
       );
       setLocalNotes(failedNote === null ? previousLocalNotes : { ...previousLocalNotes, [failedNote.id]: failedNote });
+      setRemovingNoteIds((current) => removeSetValue(current, id));
       setToast({ tone: "error", message: "Failed to move to trash. Open the note and delete again." });
     } finally {
       setIsBusy(false);
@@ -428,19 +435,47 @@ export function App() {
   }
 
   async function deleteTrash(id: string): Promise<void> {
-    await run("Deleting trash note", async () => {
+    const previousTrashNotes = trashNotes;
+    setRemovingTrashIds((current) => new Set(current).add(id));
+    await delay(cardRemoveAnimationMs);
+    setTrashNotes((currentNotes) => currentNotes.filter((note) => note.id !== id));
+    setRemovingTrashIds((current) => removeSetValue(current, id));
+    setIsBusy(true);
+    try {
       await deleteTrashNote(id);
-      setTrashNotes(await listTrash());
       setToast({ tone: "success", message: "Trash note deleted." });
-    });
+    } catch (error) {
+      setTrashNotes(previousTrashNotes);
+      setRemovingTrashIds((current) => removeSetValue(current, id));
+      if (error instanceof ApiRequestError && error.code === "not_authenticated") {
+        clearSignedInState();
+        return;
+      }
+
+      setToast({ tone: "error", message: "Failed to delete from trash. Try deleting it again." });
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function clearTrash(): Promise<void> {
-    await run("Emptying trash", async () => {
+    const previousTrashNotes = trashNotes;
+    setTrashNotes([]);
+    setIsBusy(true);
+    try {
       await emptyTrash();
-      setTrashNotes([]);
       setToast({ tone: "success", message: "Trash emptied." });
-    });
+    } catch (error) {
+      setTrashNotes(previousTrashNotes);
+      if (error instanceof ApiRequestError && error.code === "not_authenticated") {
+        clearSignedInState();
+        return;
+      }
+
+      setToast({ tone: "error", message: "Failed to empty trash. Try emptying it again." });
+    } finally {
+      setIsBusy(false);
+    }
   }
 
   async function resetLocalNotesAccess(): Promise<void> {
@@ -675,7 +710,7 @@ export function App() {
           </div>
           <div className="cardGrid">
             {trashNotes.map((note) => (
-              <article key={note.id} className="noteCard trashCard">
+              <article key={note.id} className={`noteCard trashCard ${removingTrashIds.has(note.id) ? "noteRemoving" : ""}`}>
                 <div className="trashCardBody">
                   <h2>{note.title}</h2>
                   <time>{formatDate(note.updated)}</time>
@@ -779,7 +814,7 @@ export function App() {
     return (
       <article
         key={note.id}
-        className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""} ${note.saveFailed ? "noteSaveFailed" : ""} ${note.deleteFailed ? "noteSaveFailed" : ""}`}
+        className={`noteCard ${note.pinned ? "notePinned" : ""} ${note.conflict ? "noteConflict" : ""} ${note.saveFailed ? "noteSaveFailed" : ""} ${note.deleteFailed ? "noteSaveFailed" : ""} ${removingNoteIds.has(note.id) ? "noteRemoving" : ""}`}
       >
         <button type="button" className="cardBodyButton" onClick={() => void openNote(note.id)}>
           <div className="cardHeader">
@@ -993,6 +1028,18 @@ function noteToSummary(note: Note): NoteSummary {
 function removeLocalNote(notes: Readonly<Record<string, Note>>, id: string): Readonly<Record<string, Note>> {
   const { [id]: _removed, ...remainingNotes } = notes;
   return remainingNotes;
+}
+
+function removeSetValue<T>(values: ReadonlySet<T>, value: T): ReadonlySet<T> {
+  const nextValues = new Set(values);
+  nextValues.delete(value);
+  return nextValues;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 }
 
 function createNoteFileName(title: string, date: Date): string {
