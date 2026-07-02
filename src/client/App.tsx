@@ -17,7 +17,7 @@ import {
   updateNote
 } from "./api";
 import { renderMarkdown } from "./markdown";
-import { shouldAutoDismissToast, toastFromError, type Toast } from "./toastPolicy";
+import { defaultStatusBarAutoHideMs, statusBarErrorMessage, type StatusBar } from "./statusBar";
 import type { Note, NoteSummary, UserState } from "./types";
 
 type ViewMode = "notes" | "trash";
@@ -25,8 +25,7 @@ type ModalMode = "read" | "edit" | "create";
 type LocalNoteInput = Omit<Note, "excerpt" | "searchableText" | "markdown"> & {
   readonly markdown?: string;
 };
-const toastAutoDismissMs = 5000;
-const toastFadeOutMs = 250;
+const statusBarFadeOutMs = 250;
 const cardRemoveAnimationMs = 220;
 
 interface HelpActionProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -53,8 +52,8 @@ export function App() {
   const [createBody, setCreateBody] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [textFilter, setTextFilter] = useState("");
-  const [toast, setToast] = useState<Toast | null>(null);
-  const [isToastLeaving, setIsToastLeaving] = useState(false);
+  const [statusBar, setStatusBar] = useState<StatusBar | null>(null);
+  const [isStatusBarLeaving, setIsStatusBarLeaving] = useState(false);
   const [removingNoteIds, setRemovingNoteIds] = useState<ReadonlySet<string>>(new Set());
   const [removingTrashIds, setRemovingTrashIds] = useState<ReadonlySet<string>>(new Set());
   const [isBusy, setIsBusy] = useState(false);
@@ -118,29 +117,29 @@ export function App() {
   }, [openHelpId]);
 
   useEffect(() => {
-    if (toast === null) {
-      setIsToastLeaving(false);
+    if (statusBar === null) {
+      setIsStatusBarLeaving(false);
       return;
     }
 
-    setIsToastLeaving(false);
+    setIsStatusBarLeaving(false);
 
-    if (!shouldAutoDismissToast(toast)) {
+    if (statusBar.autoHideMs === null) {
       return;
     }
 
     const fadeTimeoutId = window.setTimeout(() => {
-      setIsToastLeaving(true);
-    }, toastAutoDismissMs);
+      setIsStatusBarLeaving(true);
+    }, statusBar.autoHideMs);
     const removeTimeoutId = window.setTimeout(() => {
-      setToast(null);
-    }, toastAutoDismissMs + toastFadeOutMs);
+      setStatusBar(null);
+    }, statusBar.autoHideMs + statusBarFadeOutMs);
 
     return () => {
       window.clearTimeout(fadeTimeoutId);
       window.clearTimeout(removeTimeoutId);
     };
-  }, [toast]);
+  }, [statusBar]);
 
   const tags = useMemo(() => {
     return [...new Set(notes.flatMap((note) => note.tags))].sort((left, right) => left.localeCompare(right));
@@ -161,14 +160,18 @@ export function App() {
   const repositoryLabel = user.config?.repository ?? user.username;
 
   async function initialize(): Promise<void> {
+    showWorkingStatus("Loading notes...");
     try {
-      await runSilently("Loading session", async () => {
+      const didLoad = await runSilently("Could not load session.", async () => {
         const currentUser = await getCurrentUser();
         setUser(currentUser);
         if (currentUser.authenticated) {
           setNotes(await listNotes());
         }
       });
+      if (didLoad) {
+        hideStatusBar();
+      }
     } finally {
       setIsInitialLoading(false);
     }
@@ -176,12 +179,7 @@ export function App() {
 
   function renderNotesContent(): ReactNode {
     if (isInitialLoading) {
-      return (
-        <section className="loadingState" aria-live="polite" aria-busy="true">
-          <span className="loadingSpinner" aria-hidden="true" />
-          <span>Loading notes...</span>
-        </section>
-      );
+      return null;
     }
 
     return (
@@ -200,7 +198,7 @@ export function App() {
   async function refreshNotes(): Promise<void> {
     await run("Reloading notes", "Reloading notes from GitHub...", async () => {
       setNotes(await reloadNotes());
-      setToast({ tone: "success", message: "Notes reloaded from GitHub." });
+      showSuccessStatus("Notes reloaded from GitHub.");
     });
   }
 
@@ -213,7 +211,7 @@ export function App() {
       return;
     }
 
-    await runSilently("Opening note", async () => {
+    await runSilently("Could not open note.", async () => {
       setActiveNote(await getNote(id));
       setModalMode("read");
       setEditSessionId(null);
@@ -227,7 +225,7 @@ export function App() {
       return;
     }
 
-    await runSilently("Opening editor", async () => {
+    await runSilently("Could not open editor.", async () => {
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
       setEditTitle(response.note.title);
@@ -245,7 +243,7 @@ export function App() {
       return;
     }
 
-    await runSilently("Opening editor", async () => {
+    await runSilently("Could not open editor.", async () => {
       const note = await getNote(id);
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
@@ -279,7 +277,7 @@ export function App() {
     setLocalNotes((current) => ({ ...current, [updatedNote.id]: updatedNote }));
     upsertNoteSummary(noteToSummary(updatedNote));
     setIsBusy(true);
-    setToast({ tone: "busy", message: "Saving note..." });
+    showWorkingStatus("Saving note...");
     try {
       const result = localNotes[updatedNote.id] !== undefined && editSessionId === null
         ? await createNote({ fileName: updatedNote.fileName, title: updatedNote.title, body: updatedNote.body, tags: updatedNote.tags })
@@ -291,11 +289,11 @@ export function App() {
       await syncNotesFromBackend();
       setLocalNotes((current) => removeLocalNote(current, updatedNote.id));
       if (result.saveFailed === true) {
-        setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
+        showErrorStatus("Failed to save to GitHub. Open the note and save it again.");
       } else if (result.conflict !== undefined) {
-        setToast({ tone: "error", message: `${result.conflict.message} Review both notes, consolidate them into one, and remove the duplicate.` });
+        showErrorStatus(`${result.conflict.message} Review both notes, consolidate them into one, and remove the duplicate.`);
       } else {
-        setToast({ tone: "success", message: "Note saved." });
+        showSuccessStatus("Note saved.");
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "not_authenticated") {
@@ -306,7 +304,7 @@ export function App() {
       const failedNote = buildLocalNote({ ...updatedNote, saveFailed: true, deleteFailed: false });
       setLocalNotes((current) => ({ ...current, [failedNote.id]: failedNote }));
       upsertNoteSummary(noteToSummary(failedNote));
-      setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
+      showErrorStatus("Failed to save to GitHub. Open the note and save it again.");
     } finally {
       setIsBusy(false);
     }
@@ -325,7 +323,7 @@ export function App() {
     setLocalNotes((current) => ({ ...current, [localNote.id]: localNote }));
     upsertNoteSummary(noteToSummary(localNote));
     setIsBusy(true);
-    setToast({ tone: "busy", message: "Saving note..." });
+    showWorkingStatus("Saving note...");
     try {
       const result = await createNote({
         fileName: localNote.fileName,
@@ -340,9 +338,9 @@ export function App() {
       await syncNotesFromBackend();
       setLocalNotes((current) => removeLocalNote(current, localNote.id));
       if (result.saveFailed === true) {
-        setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
+        showErrorStatus("Failed to save to GitHub. Open the note and save it again.");
       } else {
-        setToast({ tone: "success", message: "Note saved." });
+        showSuccessStatus("Note saved.");
       }
     } catch (error) {
       setActiveNote(null);
@@ -355,7 +353,7 @@ export function App() {
       const failedNote = buildLocalNote({ ...localNote, saveFailed: true });
       setLocalNotes((current) => ({ ...current, [failedNote.id]: failedNote }));
       upsertNoteSummary(noteToSummary(failedNote));
-      setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
+      showErrorStatus("Failed to save to GitHub. Open the note and save it again.");
     } finally {
       setIsBusy(false);
     }
@@ -400,7 +398,7 @@ export function App() {
         return;
       }
 
-      setToast(toastFromError(error, "Updating pin failed."));
+      showErrorStatusFrom(error, "Updating pin failed.");
     }
   }
 
@@ -424,14 +422,14 @@ export function App() {
     setLocalNotes((current) => removeLocalNote(current, id));
     setRemovingNoteIds((current) => removeSetValue(current, id));
     setIsBusy(true);
-    setToast({ tone: "busy", message: "Moving note to trash..." });
+    showWorkingStatus("Moving note to trash...");
     try {
       const result = await sendNoteToTrash(id);
       await syncNotesFromBackend();
       if (result.deleteFailed === true) {
-        setToast({ tone: "error", message: "Failed to move to trash. Open the note and delete again." });
+        showErrorStatus("Failed to move to trash. Open the note and delete again.");
       } else {
-        setToast({ tone: "success", message: "Note moved to trash." });
+        showSuccessStatus("Note moved to trash.");
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "not_authenticated") {
@@ -447,7 +445,7 @@ export function App() {
       );
       setLocalNotes(failedNote === null ? previousLocalNotes : { ...previousLocalNotes, [failedNote.id]: failedNote });
       setRemovingNoteIds((current) => removeSetValue(current, id));
-      setToast({ tone: "error", message: "Failed to move to trash. Open the note and delete again." });
+      showErrorStatus("Failed to move to trash. Open the note and delete again.");
     } finally {
       setIsBusy(false);
     }
@@ -458,7 +456,7 @@ export function App() {
   }
 
   async function openTrash(): Promise<void> {
-    await runSilently("Loading trash", async () => {
+    await runSilently("Could not load trash.", async () => {
       setTrashNotes(await listTrash());
       setViewMode("trash");
       setActiveNote(null);
@@ -472,10 +470,10 @@ export function App() {
     setTrashNotes((currentNotes) => currentNotes.filter((note) => note.id !== id));
     setRemovingTrashIds((current) => removeSetValue(current, id));
     setIsBusy(true);
-    setToast({ tone: "busy", message: "Deleting trash note..." });
+    showWorkingStatus("Deleting trash note...");
     try {
       await deleteTrashNote(id);
-      setToast({ tone: "success", message: "Trash note deleted." });
+      showSuccessStatus("Trash note deleted.");
     } catch (error) {
       setTrashNotes(previousTrashNotes);
       setRemovingTrashIds((current) => removeSetValue(current, id));
@@ -484,7 +482,7 @@ export function App() {
         return;
       }
 
-      setToast({ tone: "error", message: "Failed to delete from trash. Try deleting it again." });
+      showErrorStatus("Failed to delete from trash. Try deleting it again.");
     } finally {
       setIsBusy(false);
     }
@@ -494,10 +492,10 @@ export function App() {
     const previousTrashNotes = trashNotes;
     setTrashNotes([]);
     setIsBusy(true);
-    setToast({ tone: "busy", message: "Emptying trash..." });
+    showWorkingStatus("Emptying trash...");
     try {
       await emptyTrash();
-      setToast({ tone: "success", message: "Trash emptied." });
+      showSuccessStatus("Trash emptied.");
     } catch (error) {
       setTrashNotes(previousTrashNotes);
       if (error instanceof ApiRequestError && error.code === "not_authenticated") {
@@ -505,7 +503,7 @@ export function App() {
         return;
       }
 
-      setToast({ tone: "error", message: "Failed to empty trash. Try emptying it again." });
+      showErrorStatus("Failed to empty trash. Try emptying it again.");
     } finally {
       setIsBusy(false);
     }
@@ -516,7 +514,7 @@ export function App() {
     await run("Resetting notes access", "Disconnecting notes repository...", async () => {
       await resetNotesAccess();
       clearSignedInState();
-      setToast({ tone: "success", message: "This device was disconnected from the GitHub notes repository." });
+      showSuccessStatus("This device was disconnected from the GitHub notes repository.");
     });
   }
 
@@ -555,9 +553,57 @@ export function App() {
     setViewMode("notes");
   }
 
+  function showWorkingStatus(message: string): void {
+    setStatusBar({
+      tone: "busy",
+      message,
+      autoHideMs: null,
+      showSpinner: true,
+      showClose: false
+    });
+  }
+
+  function showSuccessStatus(message: string, autoHideMs = defaultStatusBarAutoHideMs): void {
+    setStatusBar({
+      tone: "success",
+      message,
+      autoHideMs,
+      showSpinner: false,
+      showClose: false
+    });
+  }
+
+  function showErrorStatus(message: string): void {
+    setStatusBar({
+      tone: "error",
+      message,
+      autoHideMs: null,
+      showSpinner: false,
+      showClose: true
+    });
+  }
+
+  function showInfoStatus(message: string, autoHideMs = defaultStatusBarAutoHideMs): void {
+    setStatusBar({
+      tone: "info",
+      message,
+      autoHideMs,
+      showSpinner: false,
+      showClose: false
+    });
+  }
+
+  function showErrorStatusFrom(error: unknown, defaultMessage: string): void {
+    showErrorStatus(statusBarErrorMessage(error, defaultMessage));
+  }
+
+  function hideStatusBar(): void {
+    setStatusBar(null);
+  }
+
   async function run(label: string, busyMessage: string, action: () => Promise<void>): Promise<void> {
     setIsBusy(true);
-    setToast({ tone: "busy", message: busyMessage });
+    showWorkingStatus(busyMessage);
     try {
       await action();
     } catch (error) {
@@ -566,23 +612,25 @@ export function App() {
         return;
       }
 
-      setToast(toastFromError(error, `${label} failed.`));
+      showErrorStatusFrom(error, `${label} failed.`);
     } finally {
       setIsBusy(false);
     }
   }
 
-  async function runSilently(label: string, action: () => Promise<void>): Promise<void> {
+  async function runSilently(fallbackErrorMessage: string, action: () => Promise<void>): Promise<boolean> {
     setIsBusy(true);
     try {
       await action();
+      return true;
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "not_authenticated") {
         clearSignedInState();
-        return;
+        return false;
       }
 
-      setToast(toastFromError(error, `${label} failed.`));
+      showErrorStatusFrom(error, fallbackErrorMessage);
+      return false;
     } finally {
       setIsBusy(false);
     }
@@ -593,7 +641,7 @@ export function App() {
       <main className="authScreen">
         <section className="authPanel">
           <AppBrand />
-          {toast !== null && <p className={`authMessage toast-${toast.tone}`}>{toast.message}</p>}
+          {statusBar !== null && <p className={`authMessage statusBar-${statusBar.tone}`}>{statusBar.message}</p>}
           <a className="button buttonPrimary" href="/auth/github">
             Sign in with GitHub
           </a>
@@ -603,7 +651,7 @@ export function App() {
   }
 
   return (
-    <main className="appShell" onClick={hideToastFromButtonClick}>
+    <main className="appShell" onClick={hideStatusBarFromButtonClick}>
       <header className="topBar">
         <div>
           <AppBrand />
@@ -693,14 +741,14 @@ export function App() {
         </div>
       </header>
 
-      {toast !== null && (
-        <div className={`toast toast-${toast.tone} ${isToastLeaving ? "toastLeaving" : ""}`} aria-live="polite">
-          <span className="toastMessage">
-            {toast.tone === "busy" && <span className="toastSpinner" aria-hidden="true" />}
-            <span>{toast.message}</span>
+      {statusBar !== null && (
+        <div className={`statusBar statusBar-${statusBar.tone} ${isStatusBarLeaving ? "statusBarLeaving" : ""}`} aria-live="polite">
+          <span className="statusBarMessage">
+            {statusBar.showSpinner && <span className="statusBarSpinner" aria-hidden="true" />}
+            <span>{statusBar.message}</span>
           </span>
-          {toast.tone !== "busy" && (
-            <button type="button" className="iconButton buttonSubtle" onClick={() => setToast(null)} aria-label="Close message">
+          {statusBar.showClose && (
+            <button type="button" className="iconButton buttonSubtle" onClick={hideStatusBar} aria-label="Close message">
               <X aria-hidden="true" size={20} />
             </button>
           )}
@@ -831,22 +879,22 @@ export function App() {
     </main>
   );
 
-  function hideToastFromButtonClick(event: MouseEvent<HTMLElement>): void {
+  function hideStatusBarFromButtonClick(event: MouseEvent<HTMLElement>): void {
     if (
-      toast !== null &&
-      shouldAutoDismissToast(toast) &&
+      statusBar !== null &&
+      statusBar.autoHideMs !== null &&
       event.target instanceof Element &&
       event.target.closest("button,[role='button']") !== null
     ) {
-      dismissTemporaryToast();
+      dismissTemporaryStatusBar();
     }
   }
 
-  function dismissTemporaryToast(): void {
-    setIsToastLeaving(true);
+  function dismissTemporaryStatusBar(): void {
+    setIsStatusBarLeaving(true);
     window.setTimeout(() => {
-      setToast(null);
-    }, toastFadeOutMs);
+      setStatusBar(null);
+    }, statusBarFadeOutMs);
   }
 
   function openLocalEditor(note: Note): void {

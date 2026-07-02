@@ -344,7 +344,6 @@ button:disabled {
   margin: 0;
 }
 
-.loadingState,
 .emptyState {
   align-items: center;
   background: #ffffff;
@@ -356,15 +355,6 @@ button:disabled {
   margin: 0 auto;
   max-width: 1180px;
   padding: 18px;
-}
-
-.loadingSpinner {
-  animation: spin 800ms linear infinite;
-  border: 3px solid #d8e0ec;
-  border-top-color: #1c4e80;
-  border-radius: 999px;
-  height: 22px;
-  width: 22px;
 }
 
 @keyframes spin {
@@ -545,7 +535,7 @@ button:disabled {
   align-self: flex-start;
 }
 
-.toast {
+.statusBar {
   align-items: center;
   border-radius: 8px;
   display: flex;
@@ -553,6 +543,7 @@ button:disabled {
   justify-content: space-between;
   margin: 0 auto 18px;
   max-width: 1180px;
+  min-height: 58px;
   opacity: 1;
   padding: 12px 14px;
   position: relative;
@@ -563,34 +554,34 @@ button:disabled {
   z-index: 30;
 }
 
-.toastLeaving {
+.statusBarLeaving {
   opacity: 0;
   transform: translateY(-4px);
 }
 
-.toast-info {
+.statusBar-info {
   background: #e8eef7;
 }
 
-.toast-success {
+.statusBar-success {
   background: #dff4e7;
 }
 
-.toast-error {
+.statusBar-error {
   background: #ffe1e1;
 }
 
-.toast-busy {
+.statusBar-busy {
   background: #e8eef7;
 }
 
-.toastMessage {
+.statusBarMessage {
   align-items: center;
   display: inline-flex;
   gap: 10px;
 }
 
-.toastSpinner {
+.statusBarSpinner {
   animation: spin 800ms linear infinite;
   border: 2px solid #b8c5d8;
   border-top-color: #1c4e80;
@@ -600,7 +591,7 @@ button:disabled {
   width: 18px;
 }
 
-.toast button {
+.statusBar button {
   background: transparent;
   border: 0;
   font-weight: 700;
