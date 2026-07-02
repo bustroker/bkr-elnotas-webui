@@ -113,7 +113,7 @@ bash deploy-render.sh
 To run both steps:
 
 ```sh
-bash build-push-image-deploy-render-dev.sh
+bash build-push-image-deploy-render.sh
 ```
 
 After deploy, check:
@@ -123,6 +123,8 @@ https://<render-service-name>.onrender.com/api/health
 ```
 
 Then open the app, log in with GitHub, and use Reload if the working copy has not loaded the latest notes yet.
+
+For Render Free, `config/app.json` can enable the backend keep-alive ping documented in [README.config.md](README.config.md). It sends a periodic request to `/api/health`, which helps reduce idle spin-downs but does not guarantee the service will never sleep.
 
 ## Updating Config Or Secrets
 
