@@ -229,6 +229,35 @@ describe("NotesService", () => {
     expect(note.body).toContain("Updated");
   });
 
+  it("clears conflict metadata after a successful save", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new MemoryGateway();
+    gateway.files.set("notes/current.md", {
+      path: "notes/current.md",
+      sha: "sha-current",
+      content: noteMarkdown("Current", "Body").replace("---\n", "---\nconflict: true\n")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    const edit = await service.startEditSession("current");
+    await service.updateNote("current", {
+      editSessionId: edit.editSessionId,
+      markdown: noteMarkdown("Current", "Resolved").replace("---\n", "---\nconflict: true\n")
+    });
+    const note = await service.getNote("current");
+
+    expect(gateway.files.get("notes/current.md")?.content).not.toContain("conflict: true");
+    expect(note.conflict).toBe(false);
+    expect(note.body).toContain("Resolved");
+  });
+
   it("marks notes with delete_failed when moving to trash fails", async () => {
     const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
     const gateway = new FailingCommitGateway();

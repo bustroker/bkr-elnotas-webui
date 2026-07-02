@@ -267,6 +267,7 @@ export function App() {
       tags: parseTags(editTags),
       body: editBody,
       updated: new Date().toISOString(),
+      conflict: false,
       saveFailed: false,
       deleteFailed: false
     });

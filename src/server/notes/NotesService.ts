@@ -126,6 +126,7 @@ export class NotesService {
     const updatedMarkdown = updateMarkdownMetadata(request.markdown, (metadata) => ({
       ...metadata,
       updated: this.clock.now().toISOString(),
+      conflict: undefined,
       saveFailed: undefined,
       deleteFailed: undefined
     }));
