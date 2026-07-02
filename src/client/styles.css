@@ -580,6 +580,26 @@ button:disabled {
   background: #ffe1e1;
 }
 
+.toast-busy {
+  background: #e8eef7;
+}
+
+.toastMessage {
+  align-items: center;
+  display: inline-flex;
+  gap: 10px;
+}
+
+.toastSpinner {
+  animation: spin 800ms linear infinite;
+  border: 2px solid #b8c5d8;
+  border-top-color: #1c4e80;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  height: 18px;
+  width: 18px;
+}
+
 .toast button {
   background: transparent;
   border: 0;
@@ -683,6 +703,42 @@ button:disabled {
   display: grid;
   gap: 6px;
   margin-bottom: 12px;
+}
+
+.tagInput {
+  position: relative;
+}
+
+.tagSuggestions {
+  background: #ffffff;
+  border: 1px solid #c7d2e2;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgb(22 31 45 / 16%);
+  display: grid;
+  left: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 35;
+}
+
+.tagSuggestions button {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #17202f;
+  justify-content: flex-start;
+  min-height: 34px;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.tagSuggestions button:hover,
+.tagSuggestions button:focus-visible {
+  background: #e8eef7;
 }
 
 .fieldHint {

@@ -1,10 +1,10 @@
 export interface Toast {
-  readonly tone: "info" | "error" | "success";
+  readonly tone: "info" | "error" | "success" | "busy";
   readonly message: string;
 }
 
 export function shouldAutoDismissToast(toast: Toast): boolean {
-  return toast.tone !== "error";
+  return toast.tone !== "error" && toast.tone !== "busy";
 }
 
 export function toastFromError(error: unknown, fallbackMessage: string): Toast {

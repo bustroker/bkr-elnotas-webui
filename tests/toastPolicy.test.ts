@@ -11,6 +11,10 @@ describe("toastPolicy", () => {
     expect(shouldAutoDismissToast({ tone: "success", message: "Saved." })).toBe(true);
   });
 
+  it("keeps busy messages visible while work is running", () => {
+    expect(shouldAutoDismissToast({ tone: "busy", message: "Saving note..." })).toBe(false);
+  });
+
   it("preserves error messages from thrown errors", () => {
     expect(toastFromError(new Error("GitHub App is not installed."), "Fallback")).toEqual({
       tone: "error",

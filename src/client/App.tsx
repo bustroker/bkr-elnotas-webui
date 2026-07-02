@@ -162,7 +162,7 @@ export function App() {
 
   async function initialize(): Promise<void> {
     try {
-      await run("Loading session", async () => {
+      await runSilently("Loading session", async () => {
         const currentUser = await getCurrentUser();
         setUser(currentUser);
         if (currentUser.authenticated) {
@@ -198,7 +198,7 @@ export function App() {
     );
   }
   async function refreshNotes(): Promise<void> {
-    await run("Reloading notes", async () => {
+    await run("Reloading notes", "Reloading notes from GitHub...", async () => {
       setNotes(await reloadNotes());
       setToast({ tone: "success", message: "Notes reloaded from GitHub." });
     });
@@ -213,7 +213,7 @@ export function App() {
       return;
     }
 
-    await run("Opening note", async () => {
+    await runSilently("Opening note", async () => {
       setActiveNote(await getNote(id));
       setModalMode("read");
       setEditSessionId(null);
@@ -227,7 +227,7 @@ export function App() {
       return;
     }
 
-    await run("Opening editor", async () => {
+    await runSilently("Opening editor", async () => {
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
       setEditTitle(response.note.title);
@@ -245,7 +245,7 @@ export function App() {
       return;
     }
 
-    await run("Opening editor", async () => {
+    await runSilently("Opening editor", async () => {
       const note = await getNote(id);
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
@@ -279,6 +279,7 @@ export function App() {
     setLocalNotes((current) => ({ ...current, [updatedNote.id]: updatedNote }));
     upsertNoteSummary(noteToSummary(updatedNote));
     setIsBusy(true);
+    setToast({ tone: "busy", message: "Saving note..." });
     try {
       const result = localNotes[updatedNote.id] !== undefined && editSessionId === null
         ? await createNote({ fileName: updatedNote.fileName, title: updatedNote.title, body: updatedNote.body, tags: updatedNote.tags })
@@ -294,7 +295,7 @@ export function App() {
       } else if (result.conflict !== undefined) {
         setToast({ tone: "error", message: `${result.conflict.message} Review both notes, consolidate them into one, and remove the duplicate.` });
       } else {
-        setToast(null);
+        setToast({ tone: "success", message: "Note saved." });
       }
     } catch (error) {
       if (error instanceof ApiRequestError && error.code === "not_authenticated") {
@@ -324,6 +325,7 @@ export function App() {
     setLocalNotes((current) => ({ ...current, [localNote.id]: localNote }));
     upsertNoteSummary(noteToSummary(localNote));
     setIsBusy(true);
+    setToast({ tone: "busy", message: "Saving note..." });
     try {
       const result = await createNote({
         fileName: localNote.fileName,
@@ -340,7 +342,7 @@ export function App() {
       if (result.saveFailed === true) {
         setToast({ tone: "error", message: "Failed to save to GitHub. Open the note and save it again." });
       } else {
-        setToast(null);
+        setToast({ tone: "success", message: "Note saved." });
       }
     } catch (error) {
       setActiveNote(null);
@@ -422,6 +424,7 @@ export function App() {
     setLocalNotes((current) => removeLocalNote(current, id));
     setRemovingNoteIds((current) => removeSetValue(current, id));
     setIsBusy(true);
+    setToast({ tone: "busy", message: "Moving note to trash..." });
     try {
       const result = await sendNoteToTrash(id);
       await syncNotesFromBackend();
@@ -455,7 +458,7 @@ export function App() {
   }
 
   async function openTrash(): Promise<void> {
-    await run("Loading trash", async () => {
+    await runSilently("Loading trash", async () => {
       setTrashNotes(await listTrash());
       setViewMode("trash");
       setActiveNote(null);
@@ -469,6 +472,7 @@ export function App() {
     setTrashNotes((currentNotes) => currentNotes.filter((note) => note.id !== id));
     setRemovingTrashIds((current) => removeSetValue(current, id));
     setIsBusy(true);
+    setToast({ tone: "busy", message: "Deleting trash note..." });
     try {
       await deleteTrashNote(id);
       setToast({ tone: "success", message: "Trash note deleted." });
@@ -490,6 +494,7 @@ export function App() {
     const previousTrashNotes = trashNotes;
     setTrashNotes([]);
     setIsBusy(true);
+    setToast({ tone: "busy", message: "Emptying trash..." });
     try {
       await emptyTrash();
       setToast({ tone: "success", message: "Trash emptied." });
@@ -508,7 +513,7 @@ export function App() {
 
   async function resetLocalNotesAccess(): Promise<void> {
     setResetConfirmOpen(false);
-    await run("Resetting notes access", async () => {
+    await run("Resetting notes access", "Disconnecting notes repository...", async () => {
       await resetNotesAccess();
       clearSignedInState();
       setToast({ tone: "success", message: "This device was disconnected from the GitHub notes repository." });
@@ -550,7 +555,24 @@ export function App() {
     setViewMode("notes");
   }
 
-  async function run(label: string, action: () => Promise<void>): Promise<void> {
+  async function run(label: string, busyMessage: string, action: () => Promise<void>): Promise<void> {
+    setIsBusy(true);
+    setToast({ tone: "busy", message: busyMessage });
+    try {
+      await action();
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.code === "not_authenticated") {
+        clearSignedInState();
+        return;
+      }
+
+      setToast(toastFromError(error, `${label} failed.`));
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function runSilently(label: string, action: () => Promise<void>): Promise<void> {
     setIsBusy(true);
     try {
       await action();
@@ -672,11 +694,16 @@ export function App() {
       </header>
 
       {toast !== null && (
-        <div className={`toast toast-${toast.tone} ${isToastLeaving ? "toastLeaving" : ""}`}>
-          <span>{toast.message}</span>
-          <button type="button" className="iconButton buttonSubtle" onClick={() => setToast(null)} aria-label="Close message">
-            <X aria-hidden="true" size={20} />
-          </button>
+        <div className={`toast toast-${toast.tone} ${isToastLeaving ? "toastLeaving" : ""}`} aria-live="polite">
+          <span className="toastMessage">
+            {toast.tone === "busy" && <span className="toastSpinner" aria-hidden="true" />}
+            <span>{toast.message}</span>
+          </span>
+          {toast.tone !== "busy" && (
+            <button type="button" className="iconButton buttonSubtle" onClick={() => setToast(null)} aria-label="Close message">
+              <X aria-hidden="true" size={20} />
+            </button>
+          )}
         </div>
       )}
 
@@ -760,6 +787,7 @@ export function App() {
           editTitle={editTitle}
           editTags={editTags}
           editBody={editBody}
+          tagSuggestions={tags}
           onEditTitleChange={setEditTitle}
           onEditTagsChange={setEditTags}
           onEditBodyChange={setEditBody}
@@ -786,7 +814,7 @@ export function App() {
             </label>
             <label>
               Tags
-              <input value={createTags} onChange={(event) => setCreateTags(event.target.value)} placeholder="tag1, tag2" />
+              <TagInput value={createTags} onChange={setCreateTags} suggestions={tags} />
             </label>
             <label>
               Markdown
@@ -881,6 +909,7 @@ function NoteModal(props: {
   readonly editTitle: string;
   readonly editTags: string;
   readonly editBody: string;
+  readonly tagSuggestions: readonly string[];
   readonly onEditTitleChange: (value: string) => void;
   readonly onEditTagsChange: (value: string) => void;
   readonly onEditBodyChange: (value: string) => void;
@@ -924,7 +953,7 @@ function NoteModal(props: {
             </label>
             <label>
               Tags
-              <input value={props.editTags} onChange={(event) => props.onEditTagsChange(event.target.value)} placeholder="tag1, tag2" />
+              <TagInput value={props.editTags} onChange={props.onEditTagsChange} suggestions={props.tagSuggestions} />
             </label>
             <label>
               Markdown
@@ -996,6 +1025,70 @@ function HelpAction({ help, helpId, actionClassName, children, openHelpId, onTog
       {isHelpOpen && (
         <div className="helpPopover" role="status">
           {help}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TagInput(props: {
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+  readonly suggestions: readonly string[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const activeFragment = currentTagFragment(props.value);
+  const selectedTags = parseTags(props.value).map((tag) => tag.toLowerCase());
+  const filteredSuggestions = props.suggestions.filter((tag) => {
+    const normalizedTag = tag.toLowerCase();
+    return !selectedTags.includes(normalizedTag) && normalizedTag.includes(activeFragment.toLowerCase());
+  });
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && wrapperRef.current?.contains(target) === true) {
+        return;
+      }
+
+      setIsOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+    };
+  }, [isOpen]);
+
+  function selectSuggestion(tag: string): void {
+    props.onChange(replaceCurrentTagFragment(props.value, tag));
+    setIsOpen(false);
+  }
+
+  return (
+    <div className="tagInput" ref={wrapperRef}>
+      <input
+        value={props.value}
+        onChange={(event) => {
+          props.onChange(event.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => setIsOpen(true)}
+        placeholder="tag1, tag2"
+        autoComplete="off"
+      />
+      {isOpen && filteredSuggestions.length > 0 && (
+        <div className="tagSuggestions" role="listbox">
+          {filteredSuggestions.map((tag) => (
+            <button key={tag} type="button" role="option" onClick={() => selectSuggestion(tag)}>
+              {tag}
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -1098,6 +1191,16 @@ function parseTags(value: string): readonly string[] {
     .split(",")
     .map((tag) => tag.trim())
     .filter((tag) => tag.length > 0);
+}
+
+function currentTagFragment(value: string): string {
+  return value.split(",").at(-1)?.trim() ?? "";
+}
+
+function replaceCurrentTagFragment(value: string, tag: string): string {
+  const parts = value.split(",");
+  parts[parts.length - 1] = ` ${tag}`;
+  return parts.map((part) => part.trim()).filter((part) => part.length > 0).join(", ");
 }
 
 function buildNoteMarkdown(note: Pick<Note, "title" | "created" | "updated" | "tags" | "pinned" | "conflict" | "saveFailed" | "deleteFailed" | "body">): string {
