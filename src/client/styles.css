@@ -10,7 +10,13 @@
 }
 
 body {
+  height: 100vh;
   margin: 0;
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
 }
 
 button,
@@ -35,7 +41,10 @@ button:disabled {
 }
 
 .appShell {
-  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
   padding: 20px;
 }
 
@@ -83,8 +92,10 @@ button:disabled {
 }
 
 .topBar {
-  margin: 0 auto 18px;
+  flex: 0 0 auto;
+  margin: 0 auto 10px;
   max-width: 1180px;
+  width: 100%;
 }
 
 .topBar h1,
@@ -313,9 +324,18 @@ button:disabled {
 }
 
 .filters {
-  margin: 0 auto 18px;
+  flex: 0 0 auto;
+  margin: 0 auto 8px;
   max-width: 1180px;
   padding: 14px;
+  width: 100%;
+}
+
+.notesScrollArea {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 20px;
 }
 
 .filters input,
@@ -539,24 +559,32 @@ button:disabled {
   align-items: center;
   border-radius: 8px;
   display: flex;
-  gap: 12px;
+  flex: 0 0 auto;
+  font-size: 14px;
+  gap: 10px;
   justify-content: space-between;
-  margin: 0 auto 18px;
+  margin: 0 auto 10px;
   max-width: 1180px;
-  min-height: 58px;
+  min-height: 32px;
   opacity: 1;
-  padding: 12px 14px;
+  padding: 5px 10px;
   position: relative;
   transform: translateY(0);
   transition:
+    background-color 180ms ease,
     opacity 250ms ease,
     transform 250ms ease;
+  width: 100%;
   z-index: 20;
 }
 
 .statusBarLeaving {
   opacity: 0;
-  transform: translateY(-4px);
+}
+
+.statusBar-empty {
+  background: transparent;
+  pointer-events: none;
 }
 
 .statusBar-info {
@@ -578,7 +606,7 @@ button:disabled {
 .statusBarMessage {
   align-items: center;
   display: inline-flex;
-  gap: 10px;
+  gap: 8px;
 }
 
 .statusBarSpinner {
@@ -587,8 +615,8 @@ button:disabled {
   border-top-color: #1c4e80;
   border-radius: 999px;
   flex: 0 0 auto;
-  height: 18px;
-  width: 18px;
+  height: 15px;
+  width: 15px;
 }
 
 .statusBar button {
@@ -747,6 +775,7 @@ button:disabled {
   margin: 0 auto;
   max-width: 1180px;
   padding: 16px;
+  width: 100%;
 }
 
 .trashView .cardGrid {
@@ -760,6 +789,7 @@ button:disabled {
 
 @media (max-width: 720px) {
   .appShell {
+    height: 100dvh;
     padding: 14px;
   }
 

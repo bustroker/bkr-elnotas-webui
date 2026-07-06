@@ -831,20 +831,6 @@ export function App() {
         </div>
       </header>
 
-      {statusBar !== null && (
-        <div className={`statusBar statusBar-${statusBar.tone} ${isStatusBarLeaving ? "statusBarLeaving" : ""}`} aria-live="polite">
-          <span className="statusBarMessage">
-            {statusBar.showSpinner && <span className="statusBarSpinner" aria-hidden="true" />}
-            <span>{statusBar.message}</span>
-          </span>
-          {statusBar.showClose && (
-            <button type="button" className="iconButton buttonSubtle" onClick={hideStatusBar} aria-label="Close message">
-              <X aria-hidden="true" size={20} />
-            </button>
-          )}
-        </div>
-      )}
-
       {confirmAction !== null && (
         <div className="modalBackdrop">
           <section className="confirmModal">
@@ -890,44 +876,50 @@ export function App() {
             <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Search notes" />
           </section>
 
-          {renderNotesContent()}
+          {renderStatusBar()}
+          <div className="notesScrollArea">{renderNotesContent()}</div>
         </>
       )}
 
       {viewMode === "trash" && (
-        <section className="trashView">
-          <div className="sectionHeader">
-            <h2>Trash</h2>
-            <div>
-              <button type="button" className="button buttonDanger" onClick={confirmClearTrash} disabled={trashNotes.length === 0}>
-                Empty Trash
-              </button>
-            </div>
-          </div>
-          <div className="cardGrid">
-            {trashNotes.map((note) => (
-              <article key={note.id} className={`noteCard trashCard ${removingTrashIds.has(note.id) ? "noteRemoving" : ""}`}>
-                <button type="button" className="cardBodyButton trashCardBody" onClick={() => void openTrashNote(note.id)}>
-                  <h2>{note.title}</h2>
-                  <time>{formatDate(note.deleted ?? note.updated)}</time>
-                  {note.excerpt.length > 0 ? (
-                    <div className="cardMarkdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(note.excerpt) }} />
-                  ) : (
-                    <p>No content</p>
-                  )}
-                </button>
-                <div className="cardActions">
-                  <button type="button" className="iconButton" onClick={() => void restoreTrash(note.id)} aria-label="Restore note">
-                    <RotateCcw aria-hidden="true" size={18} />
-                  </button>
-                  <button type="button" className="iconButton" onClick={() => confirmDeleteTrash(note.id)} aria-label="Delete permanently">
-                    <Trash2 aria-hidden="true" size={18} />
+        <>
+          {renderStatusBar()}
+          <div className="notesScrollArea">
+            <section className="trashView">
+              <div className="sectionHeader">
+                <h2>Trash</h2>
+                <div>
+                  <button type="button" className="button buttonDanger" onClick={confirmClearTrash} disabled={trashNotes.length === 0}>
+                    Empty Trash
                   </button>
                 </div>
-              </article>
-            ))}
+              </div>
+              <div className="cardGrid">
+                {trashNotes.map((note) => (
+                  <article key={note.id} className={`noteCard trashCard ${removingTrashIds.has(note.id) ? "noteRemoving" : ""}`}>
+                    <button type="button" className="cardBodyButton trashCardBody" onClick={() => void openTrashNote(note.id)}>
+                      <h2>{note.title}</h2>
+                      <time>{formatDate(note.deleted ?? note.updated)}</time>
+                      {note.excerpt.length > 0 ? (
+                        <div className="cardMarkdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(note.excerpt) }} />
+                      ) : (
+                        <p>No content</p>
+                      )}
+                    </button>
+                    <div className="cardActions">
+                      <button type="button" className="iconButton" onClick={() => void restoreTrash(note.id)} aria-label="Restore note">
+                        <RotateCcw aria-hidden="true" size={18} />
+                      </button>
+                      <button type="button" className="iconButton" onClick={() => confirmDeleteTrash(note.id)} aria-label="Delete permanently">
+                        <Trash2 aria-hidden="true" size={18} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
           </div>
-        </section>
+        </>
       )}
 
       {activeNote !== null && (
@@ -1000,6 +992,29 @@ export function App() {
     window.setTimeout(() => {
       setStatusBar(null);
     }, statusBarFadeOutMs);
+  }
+
+  function renderStatusBar(): ReactNode {
+    return (
+      <div
+        className={`statusBar ${statusBar === null ? "statusBar-empty" : `statusBar-${statusBar.tone}`} ${isStatusBarLeaving ? "statusBarLeaving" : ""}`}
+        aria-live="polite"
+      >
+        {statusBar !== null && (
+          <>
+            <span className="statusBarMessage">
+              {statusBar.showSpinner && <span className="statusBarSpinner" aria-hidden="true" />}
+              <span>{statusBar.message}</span>
+            </span>
+            {statusBar.showClose && (
+              <button type="button" className="iconButton buttonSubtle" onClick={hideStatusBar} aria-label="Close message">
+                <X aria-hidden="true" size={20} />
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    );
   }
 
   function openLocalEditor(note: Note): void {
