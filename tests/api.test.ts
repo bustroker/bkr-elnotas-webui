@@ -70,6 +70,38 @@ describe("notes API", () => {
     expect(sessions.get(session.id)).toBeNull();
     expect(response.headers["set-cookie"]).toContain("elnotas_session=");
   });
+
+  it("restores trash notes for authenticated sessions", async () => {
+    const app = Fastify({ logger: false });
+    await app.register(fastifyCookie);
+    const sessions = new AuthSessionStore();
+    const session = sessions.create("alice");
+    let restoredId: string | null = null;
+    registerNotesRoutes({
+      app,
+      config: testConfig(),
+      sessions,
+      notes: fakeNotesApi({
+        async restoreTrashNote(id) {
+          restoredId = id;
+          return { noteId: "one" };
+        }
+      })
+    });
+    registerErrorHandler(app);
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/trash/one/restore",
+      cookies: {
+        elnotas_session: session.id
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({ noteId: "one" });
+    expect(restoredId).toBe("one");
+  });
 });
 
 function fakeNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
@@ -80,10 +112,12 @@ function fakeNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
     title: "One",
     created: "2026-06-22T10:00:00.000Z",
     updated: "2026-06-22T10:00:00.000Z",
+    deleted: null,
     tags: ["test"],
     pinned: false,
     conflict: false,
     saveFailed: false,
+    deleteFailed: false,
     excerpt: "Body",
     searchableText: "One Body",
     body: "Body",
@@ -117,6 +151,12 @@ function fakeNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
     },
     async listTrash() {
       return [];
+    },
+    async getTrashNote() {
+      return note;
+    },
+    async restoreTrashNote() {
+      return { noteId: note.id };
     },
     async permanentlyDeleteTrashNote() {},
     async emptyTrash() {},

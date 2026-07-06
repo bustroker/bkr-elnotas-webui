@@ -178,15 +178,19 @@ export class NotesService {
         return { noteId: id };
       }
 
-      const trashFileName = `${timestampSlug(this.clock.now())}-${note.fileName}`;
+      const trashFileName = await this.availableFileNameInFolder(this.config.trashFolder, note.fileName);
       const trashPath = this.trashPath(trashFileName);
+      const trashMarkdown = updateMarkdownMetadata(currentRemoteFile.content, (metadata) => ({
+        ...metadata,
+        deleted: this.clock.now().toISOString()
+      }));
       const changes: GitHubFileChange[] = [
-        { type: "write", path: trashPath, content: currentRemoteFile.content },
+        { type: "write", path: trashPath, content: trashMarkdown },
         { type: "delete", path: note.path }
       ];
       const trashFiles = await this.gateway.listMarkdownFiles(this.config.trashFolder);
       if (trashFiles.length >= this.config.trashSizeLimit) {
-        const oldestFiles = [...trashFiles].sort((left, right) => left.path.localeCompare(right.path));
+        const oldestFiles = this.sortTrashFilesByDeletedDateAsc(trashFiles);
         const deleteCount = trashFiles.length - this.config.trashSizeLimit + 1;
         for (const file of oldestFiles.slice(0, deleteCount)) {
           changes.push({ type: "delete", path: file.path });
@@ -207,16 +211,35 @@ export class NotesService {
 
   public async listTrash(): Promise<readonly NoteSummary[]> {
     const files = await this.gateway.listMarkdownFiles(this.config.trashFolder);
-    return sortNotes(files.map((file) => toNoteSummary(parseNoteMarkdown(file.path, file.content))));
+    return this.sortTrashFilesByDeletedDateDesc(files).map((file) => toNoteSummary(parseNoteMarkdown(file.path, file.content)));
+  }
+
+  public async getTrashNote(id: string): Promise<Note> {
+    const file = await this.findTrashFile(id);
+    return parseNoteMarkdown(file.path, file.content);
+  }
+
+  public async restoreTrashNote(id: string): Promise<NoteMutationResult> {
+    const trashFile = await this.findTrashFile(id);
+    const restoredFileName = await this.availableFileNameInFolder(this.config.notesFolder, path.basename(trashFile.path));
+    const restoredPath = this.activePath(restoredFileName);
+    const restoredMarkdown = updateMarkdownMetadata(trashFile.content, (metadata) => ({
+      ...metadata,
+      deleted: undefined
+    }));
+    const restoredNote = parseNoteMarkdown(restoredPath, restoredMarkdown);
+
+    await this.gateway.commitChanges(`Restore note: ${restoredNote.title}`, [
+      { type: "write", path: restoredPath, content: restoredMarkdown },
+      { type: "delete", path: trashFile.path }
+    ]);
+    await this.reloadActiveNotes();
+
+    return { noteId: restoredNote.id };
   }
 
   public async permanentlyDeleteTrashNote(id: string): Promise<void> {
-    const files = await this.gateway.listMarkdownFiles(this.config.trashFolder);
-    const file = files.find((candidate) => candidate.path.split("/").at(-1)?.replace(/\.md$/i, "") === id);
-    if (file === undefined) {
-      throw new ResultError("trash_note_not_found", `Trash note '${id}' was not found.`, 404);
-    }
-
+    const file = await this.findTrashFile(id);
     await this.gateway.commitChanges(`Delete trash note: ${id}`, [{ type: "delete", path: file.path }]);
   }
 
@@ -286,6 +309,45 @@ export class NotesService {
       deleteFailed: true,
       saveFailed: undefined
     }));
+  }
+
+  private async findTrashFile(id: string): Promise<RemoteMarkdownFile> {
+    const files = await this.gateway.listMarkdownFiles(this.config.trashFolder);
+    const file = files.find((candidate) => candidate.path.split("/").at(-1)?.replace(/\.md$/i, "") === id);
+    if (file === undefined) {
+      throw new ResultError("trash_note_not_found", `Trash note '${id}' was not found.`, 404);
+    }
+
+    return file;
+  }
+
+  private async availableFileNameInFolder(folder: string, preferredFileName: string): Promise<string> {
+    const existingFileNames = new Set((await this.gateway.listMarkdownFiles(folder)).map((file) => path.basename(file.path)));
+    if (!existingFileNames.has(preferredFileName)) {
+      return preferredFileName;
+    }
+
+    const extension = path.extname(preferredFileName);
+    const baseName = path.basename(preferredFileName, extension);
+    for (let index = 2; ; index += 1) {
+      const candidate = `${baseName}-${index}${extension}`;
+      if (!existingFileNames.has(candidate)) {
+        return candidate;
+      }
+    }
+  }
+
+  private sortTrashFilesByDeletedDateDesc(files: readonly RemoteMarkdownFile[]): readonly RemoteMarkdownFile[] {
+    return [...files].sort((left, right) => Date.parse(this.trashDeletedDate(right)) - Date.parse(this.trashDeletedDate(left)));
+  }
+
+  private sortTrashFilesByDeletedDateAsc(files: readonly RemoteMarkdownFile[]): readonly RemoteMarkdownFile[] {
+    return [...files].sort((left, right) => Date.parse(this.trashDeletedDate(left)) - Date.parse(this.trashDeletedDate(right)));
+  }
+
+  private trashDeletedDate(file: RemoteMarkdownFile): string {
+    const note = parseNoteMarkdown(file.path, file.content);
+    return note.deleted ?? note.updated;
   }
 
   private async ensureLoaded(): Promise<void> {

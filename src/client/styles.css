@@ -146,7 +146,7 @@ button:disabled {
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  z-index: 25;
+  z-index: 40;
 }
 
 .helpAction {
@@ -191,7 +191,7 @@ button:disabled {
   right: 0;
   top: calc(100% + 8px);
   width: 260px;
-  z-index: 30;
+  z-index: 50;
 }
 
 .button,
@@ -551,7 +551,7 @@ button:disabled {
   transition:
     opacity 250ms ease,
     transform 250ms ease;
-  z-index: 30;
+  z-index: 20;
 }
 
 .statusBarLeaving {
@@ -605,7 +605,7 @@ button:disabled {
   justify-content: center;
   padding: 20px;
   position: fixed;
-  z-index: 10;
+  z-index: 100;
 }
 
 .noteModal {
@@ -758,11 +758,6 @@ button:disabled {
   padding: 16px;
 }
 
-.trashCard .buttonDanger {
-  align-self: flex-start;
-  margin: 0 16px 16px;
-}
-
 @media (max-width: 720px) {
   .appShell {
     padding: 14px;
@@ -838,10 +833,6 @@ button:disabled {
 
   .cardMarkdownBody {
     font-size: 14px;
-  }
-
-  .trashCard .buttonDanger {
-    margin: 0 12px 12px;
   }
 
   .noteModal {

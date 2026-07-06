@@ -5,6 +5,7 @@ export interface NoteMetadata {
   readonly title: string;
   readonly created: string;
   readonly updated: string;
+  readonly deleted?: string;
   readonly tags: readonly string[];
   readonly pinned?: true;
   readonly conflict?: true;
@@ -24,6 +25,7 @@ export function parseNoteMarkdown(path: string, markdown: string): Note {
     title: metadata.title,
     created: metadata.created,
     updated: metadata.updated,
+    deleted: metadata.deleted ?? null,
     tags: metadata.tags,
     pinned: metadata.pinned === true,
     conflict: metadata.conflict === true,
@@ -44,6 +46,10 @@ export function serializeNoteMarkdown(metadata: NoteMetadata, body: string): str
 
   if (metadata.pinned === true) {
     data.pinned = true;
+  }
+
+  if (metadata.deleted !== undefined) {
+    data.deleted = metadata.deleted;
   }
 
   if (metadata.conflict === true) {
@@ -89,6 +95,7 @@ function normalizeMetadata(value: Record<string, unknown>, path: string): NoteMe
     title: readString(value.title) ?? titleFromPath(path),
     created: readDateString(value.created) ?? new Date(0).toISOString(),
     updated: readDateString(value.updated) ?? readDateString(value.created) ?? new Date(0).toISOString(),
+    deleted: readDateString(value.deleted) ?? undefined,
     tags: normalizeTags(readTags(value.tags)),
     pinned: value.pinned === true ? true : undefined,
     conflict: value.conflict === true ? true : undefined,

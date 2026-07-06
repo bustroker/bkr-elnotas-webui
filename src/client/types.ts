@@ -15,6 +15,7 @@ export interface NoteSummary {
   readonly title: string;
   readonly created: string;
   readonly updated: string;
+  readonly deleted: string | null;
   readonly tags: readonly string[];
   readonly pinned: boolean;
   readonly conflict: boolean;

@@ -99,23 +99,13 @@ describe("NotesService", () => {
     expect(gateway.files.get("notes/original.md")?.content).toContain("Remote changed");
   });
 
-  it("enforces trash size limit by deleting the oldest trash file", async () => {
+  it("moves notes to trash without renaming and records the deleted timestamp", async () => {
     const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
     const gateway = new MemoryGateway();
     gateway.files.set("notes/current.md", {
       path: "notes/current.md",
       sha: "sha-current",
       content: noteMarkdown("Current", "Body")
-    });
-    gateway.files.set("trash/20260101-000000-old.md", {
-      path: "trash/20260101-000000-old.md",
-      sha: "sha-old",
-      content: noteMarkdown("Old", "Body")
-    });
-    gateway.files.set("trash/20260201-000000-newer.md", {
-      path: "trash/20260201-000000-newer.md",
-      sha: "sha-newer",
-      content: noteMarkdown("Newer", "Body")
     });
     const service = new NotesService({
       config,
@@ -128,8 +118,151 @@ describe("NotesService", () => {
     await service.reloadActiveNotes();
     await service.sendToTrash("current");
 
-    expect(gateway.files.has("trash/20260101-000000-old.md")).toBe(false);
+    expect(gateway.files.has("notes/current.md")).toBe(false);
+    expect(gateway.files.get("trash/current.md")?.content).toContain("deleted: '2026-06-22T10:30:00.000Z'");
+  });
+
+  it("uses an indexed trash file name instead of overwriting an existing trash note", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new MemoryGateway();
+    gateway.files.set("notes/current.md", {
+      path: "notes/current.md",
+      sha: "sha-current",
+      content: noteMarkdown("Current", "Active")
+    });
+    gateway.files.set("trash/current.md", {
+      path: "trash/current.md",
+      sha: "sha-trash",
+      content: noteMarkdown("Current", "Existing trash").replace("---\n", "---\ndeleted: 2026-01-01T00:00:00.000Z\n")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    await service.sendToTrash("current");
+
+    expect(gateway.files.get("trash/current.md")?.content).toContain("Existing trash");
+    expect(gateway.files.get("trash/current-2.md")?.content).toContain("Active");
+  });
+
+  it("enforces trash size limit by deleting the oldest deleted note", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new MemoryGateway();
+    gateway.files.set("notes/current.md", {
+      path: "notes/current.md",
+      sha: "sha-current",
+      content: noteMarkdown("Current", "Body")
+    });
+    gateway.files.set("trash/old.md", {
+      path: "trash/old.md",
+      sha: "sha-old",
+      content: noteMarkdown("Old", "Body").replace("---\n", "---\ndeleted: 2026-01-01T00:00:00.000Z\n")
+    });
+    gateway.files.set("trash/newer.md", {
+      path: "trash/newer.md",
+      sha: "sha-newer",
+      content: noteMarkdown("Newer", "Body").replace("---\n", "---\ndeleted: 2026-02-01T00:00:00.000Z\n")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    await service.sendToTrash("current");
+
+    expect(gateway.files.has("trash/old.md")).toBe(false);
     expect([...gateway.files.keys()].filter((key) => key.startsWith("trash/"))).toHaveLength(2);
+  });
+
+  it("lists trash by deleted timestamp descending", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new MemoryGateway();
+    gateway.files.set("trash/old.md", {
+      path: "trash/old.md",
+      sha: "sha-old",
+      content: noteMarkdown("Old", "Body").replace("---\n", "---\ndeleted: 2026-01-01T00:00:00.000Z\n")
+    });
+    gateway.files.set("trash/new.md", {
+      path: "trash/new.md",
+      sha: "sha-new",
+      content: noteMarkdown("New", "Body").replace("---\n", "---\ndeleted: 2026-03-01T00:00:00.000Z\n")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    const trash = await service.listTrash();
+
+    expect(trash.map((note) => note.id)).toEqual(["new", "old"]);
+  });
+
+  it("restores trash notes with the original file name and clears deleted metadata", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new MemoryGateway();
+    gateway.files.set("trash/current.md", {
+      path: "trash/current.md",
+      sha: "sha-trash",
+      content: noteMarkdown("Current", "Body").replace("---\n", "---\ndeleted: 2026-06-22T10:30:00.000Z\n")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    const result = await service.restoreTrashNote("current");
+
+    expect(result.noteId).toBe("current");
+    expect(gateway.files.has("trash/current.md")).toBe(false);
+    expect(gateway.files.get("notes/current.md")?.content).not.toContain("deleted:");
+  });
+
+  it("restores trash notes with an indexed file name when the original already exists", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new MemoryGateway();
+    gateway.files.set("notes/current.md", {
+      path: "notes/current.md",
+      sha: "sha-active",
+      content: noteMarkdown("Current", "Active")
+    });
+    gateway.files.set("notes/current-2.md", {
+      path: "notes/current-2.md",
+      sha: "sha-active-2",
+      content: noteMarkdown("Current 2", "Active")
+    });
+    gateway.files.set("trash/current.md", {
+      path: "trash/current.md",
+      sha: "sha-trash",
+      content: noteMarkdown("Current", "Trash").replace("---\n", "---\ndeleted: 2026-06-22T10:30:00.000Z\n")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    const result = await service.restoreTrashNote("current");
+
+    expect(result.noteId).toBe("current-3");
+    expect(gateway.files.get("notes/current.md")?.content).toContain("Active");
+    expect(gateway.files.get("notes/current-3.md")?.content).toContain("Trash");
   });
 
   it("pins notes in the working copy without waiting for the GitHub commit", async () => {

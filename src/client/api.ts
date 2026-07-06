@@ -74,6 +74,15 @@ export async function listTrash(): Promise<readonly NoteSummary[]> {
   return response.notes;
 }
 
+export async function getTrashNote(id: string): Promise<Note> {
+  const response = await request<{ readonly note: Note }>(`/api/trash/${encodeURIComponent(id)}`);
+  return response.note;
+}
+
+export async function restoreTrashNote(id: string): Promise<MutationResult> {
+  return request<MutationResult>(`/api/trash/${encodeURIComponent(id)}/restore`, { method: "POST" });
+}
+
 export async function deleteTrashNote(id: string): Promise<void> {
   await request<void>(`/api/trash/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

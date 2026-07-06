@@ -99,6 +99,18 @@ export function registerNotesRoutes(input: {
     return { notes: await notes.listTrash() };
   });
 
+  app.get("/api/trash/:id", async (request) => {
+    getRequiredUsername(request, sessions);
+    const id = pathParam(request.params, "id");
+    return { note: await notes.getTrashNote(id) };
+  });
+
+  app.post("/api/trash/:id/restore", async (request) => {
+    getRequiredUsername(request, sessions);
+    const id = pathParam(request.params, "id");
+    return notes.restoreTrashNote(id);
+  });
+
   app.delete("/api/trash/:id", async (request, reply) => {
     getRequiredUsername(request, sessions);
     const id = pathParam(request.params, "id");
@@ -140,6 +152,8 @@ export interface NotesApi {
   pinNote(id: string, request: PinNoteRequest): Promise<NoteMutationResult>;
   sendToTrash(id: string): Promise<NoteMutationResult>;
   listTrash(): Promise<readonly NoteSummary[]>;
+  getTrashNote(id: string): Promise<Note>;
+  restoreTrashNote(id: string): Promise<NoteMutationResult>;
   permanentlyDeleteTrashNote(id: string): Promise<void>;
   emptyTrash(): Promise<void>;
   resetLocalAccess(): Promise<void>;

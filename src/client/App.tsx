@@ -7,11 +7,13 @@ import {
   emptyTrash,
   getCurrentUser,
   getNote,
+  getTrashNote,
   listNotes,
   listTrash,
   pinNote,
   reloadNotes,
   resetNotesAccess,
+  restoreTrashNote,
   sendNoteToTrash,
   startEditSession,
   updateNote
@@ -21,9 +23,17 @@ import { defaultStatusBarAutoHideMs, statusBarErrorMessage, type StatusBar } fro
 import type { Note, NoteSummary, UserState } from "./types";
 
 type ViewMode = "notes" | "trash";
+type ActiveNoteLocation = "notes" | "trash";
 type ModalMode = "read" | "edit" | "create";
 type LocalNoteInput = Omit<Note, "excerpt" | "searchableText" | "markdown"> & {
   readonly markdown?: string;
+};
+type ConfirmAction = {
+  readonly title: string;
+  readonly message: string;
+  readonly confirmLabel: string;
+  readonly confirmClassName?: string;
+  readonly onConfirm: () => void | Promise<void>;
 };
 const statusBarFadeOutMs = 250;
 const cardRemoveAnimationMs = 220;
@@ -42,6 +52,7 @@ export function App() {
   const [trashNotes, setTrashNotes] = useState<readonly NoteSummary[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>("notes");
   const [activeNote, setActiveNote] = useState<Note | null>(null);
+  const [activeNoteLocation, setActiveNoteLocation] = useState<ActiveNoteLocation>("notes");
   const [modalMode, setModalMode] = useState<ModalMode>("read");
   const [editSessionId, setEditSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -61,7 +72,7 @@ export function App() {
   const [pwaUpdateReady, setPwaUpdateReady] = useState(false);
   const [actionsMenuOpen, setActionsMenuOpen] = useState(false);
   const [openHelpId, setOpenHelpId] = useState<string | null>(null);
-  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
   const localNotesRef = useRef<Readonly<Record<string, Note>>>({});
 
@@ -206,6 +217,7 @@ export function App() {
     const localNote = localNotes[id];
     if (localNote !== undefined) {
       setActiveNote(localNote);
+      setActiveNoteLocation("notes");
       setModalMode("read");
       setEditSessionId(null);
       return;
@@ -213,6 +225,7 @@ export function App() {
 
     await runSilently("Could not open note.", async () => {
       setActiveNote(await getNote(id));
+      setActiveNoteLocation("notes");
       setModalMode("read");
       setEditSessionId(null);
     });
@@ -228,6 +241,7 @@ export function App() {
     await runSilently("Could not open editor.", async () => {
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
+      setActiveNoteLocation("notes");
       setEditTitle(response.note.title);
       setEditTags(response.note.tags.join(", "));
       setEditBody(response.note.body);
@@ -247,6 +261,7 @@ export function App() {
       const note = await getNote(id);
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
+      setActiveNoteLocation("notes");
       setEditTitle(response.note.title);
       setEditTags(response.note.tags.join(", "));
       setEditBody(response.note.body);
@@ -464,8 +479,30 @@ export function App() {
     });
   }
 
+  async function openTrashNote(id: string): Promise<void> {
+    await runSilently("Could not open trash note.", async () => {
+      setActiveNote(await getTrashNote(id));
+      setActiveNoteLocation("trash");
+      setModalMode("read");
+      setEditSessionId(null);
+    });
+  }
+
+  function confirmDeleteTrash(id: string): void {
+    setConfirmAction({
+      title: "Delete permanently?",
+      message: "This permanently deletes the note from trash. It cannot be restored from this app after deletion.",
+      confirmLabel: "Delete",
+      confirmClassName: "buttonDanger",
+      onConfirm: () => deleteTrash(id)
+    });
+  }
+
   async function deleteTrash(id: string): Promise<void> {
     const previousTrashNotes = trashNotes;
+    if (activeNote?.id === id) {
+      setActiveNote(null);
+    }
     setRemovingTrashIds((current) => new Set(current).add(id));
     await delay(cardRemoveAnimationMs);
     setTrashNotes((currentNotes) => currentNotes.filter((note) => note.id !== id));
@@ -489,8 +526,19 @@ export function App() {
     }
   }
 
+  function confirmClearTrash(): void {
+    setConfirmAction({
+      title: "Empty trash?",
+      message: "This permanently deletes every note currently in trash. This cannot be undone from this app.",
+      confirmLabel: "Empty Trash",
+      confirmClassName: "buttonDanger",
+      onConfirm: clearTrash
+    });
+  }
+
   async function clearTrash(): Promise<void> {
     const previousTrashNotes = trashNotes;
+    setActiveNote(null);
     setTrashNotes([]);
     setIsBusy(true);
     showWorkingStatus("Emptying trash...");
@@ -510,8 +558,37 @@ export function App() {
     }
   }
 
+  async function restoreTrash(id: string): Promise<void> {
+    const previousTrashNotes = trashNotes;
+    if (activeNote?.id === id) {
+      setActiveNote(null);
+    }
+    setRemovingTrashIds((current) => new Set(current).add(id));
+    await delay(cardRemoveAnimationMs);
+    setTrashNotes((currentNotes) => currentNotes.filter((note) => note.id !== id));
+    setRemovingTrashIds((current) => removeSetValue(current, id));
+    setIsBusy(true);
+    showWorkingStatus("Restoring note...");
+    try {
+      await restoreTrashNote(id);
+      setTrashNotes(await listTrash());
+      await syncNotesFromBackend();
+      showSuccessStatus("Note restored.");
+    } catch (error) {
+      setTrashNotes(previousTrashNotes);
+      setRemovingTrashIds((current) => removeSetValue(current, id));
+      if (error instanceof ApiRequestError && error.code === "not_authenticated") {
+        clearSignedInState();
+        return;
+      }
+
+      showErrorStatus("Failed to restore note. Try restoring it again.");
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
   async function resetLocalNotesAccess(): Promise<void> {
-    setResetConfirmOpen(false);
     await run("Resetting notes access", "Disconnecting notes repository...", async () => {
       await resetNotesAccess();
       clearSignedInState();
@@ -541,6 +618,7 @@ export function App() {
     setLocalNotes({});
     setTrashNotes([]);
     setActiveNote(null);
+    setActiveNoteLocation("notes");
     setModalMode("read");
     setEditSessionId(null);
     setEditTitle("");
@@ -720,7 +798,18 @@ export function App() {
                     <HelpAction
                       type="button"
                       actionClassName="menuAction buttonDanger"
-                      onClick={() => runMenuAction(() => setResetConfirmOpen(true))}
+                      onClick={() =>
+                        runMenuAction(() =>
+                          setConfirmAction({
+                            title: "Disconnect notes repository?",
+                            message:
+                              "This disconnects this device from the GitHub notes repository. It does not change permissions in GitHub, and you can sign in again later.",
+                            confirmLabel: "Disconnect",
+                            confirmClassName: "buttonDanger",
+                            onConfirm: resetLocalNotesAccess
+                          })
+                        )
+                      }
                       disabled={isBusy}
                       help="Disconnect this device from the GitHub notes repository. You can sign in again later."
                       helpId="reset-access"
@@ -756,24 +845,31 @@ export function App() {
         </div>
       )}
 
-      {resetConfirmOpen && (
+      {confirmAction !== null && (
         <div className="modalBackdrop">
           <section className="confirmModal">
             <div className="modalHeader">
-              <h2>Disconnect notes repository?</h2>
-              <button type="button" className="iconButton buttonSubtle" onClick={() => setResetConfirmOpen(false)} aria-label="Close">
+              <h2>{confirmAction.title}</h2>
+              <button type="button" className="iconButton buttonSubtle" onClick={() => setConfirmAction(null)} aria-label="Close">
                 <X aria-hidden="true" size={22} />
               </button>
             </div>
-            <p>
-              This disconnects this device from the GitHub notes repository. It does not change permissions in GitHub, and you can sign in again later.
-            </p>
+            <p>{confirmAction.message}</p>
             <div className="modalActions">
-              <button type="button" className="button" onClick={() => setResetConfirmOpen(false)}>
+              <button type="button" className="button" onClick={() => setConfirmAction(null)}>
                 Cancel
               </button>
-              <button type="button" className="button buttonDanger" onClick={() => void resetLocalNotesAccess()} disabled={isBusy}>
-                Disconnect
+              <button
+                type="button"
+                className={`button ${confirmAction.confirmClassName ?? ""}`}
+                onClick={() => {
+                  const action = confirmAction.onConfirm;
+                  setConfirmAction(null);
+                  void action();
+                }}
+                disabled={isBusy}
+              >
+                {confirmAction.confirmLabel}
               </button>
             </div>
           </section>
@@ -803,7 +899,7 @@ export function App() {
           <div className="sectionHeader">
             <h2>Trash</h2>
             <div>
-              <button type="button" className="button buttonDanger" onClick={() => void clearTrash()} disabled={trashNotes.length === 0}>
+              <button type="button" className="button buttonDanger" onClick={confirmClearTrash} disabled={trashNotes.length === 0}>
                 Empty Trash
               </button>
             </div>
@@ -811,18 +907,23 @@ export function App() {
           <div className="cardGrid">
             {trashNotes.map((note) => (
               <article key={note.id} className={`noteCard trashCard ${removingTrashIds.has(note.id) ? "noteRemoving" : ""}`}>
-                <div className="trashCardBody">
+                <button type="button" className="cardBodyButton trashCardBody" onClick={() => void openTrashNote(note.id)}>
                   <h2>{note.title}</h2>
-                  <time>{formatDate(note.updated)}</time>
+                  <time>{formatDate(note.deleted ?? note.updated)}</time>
                   {note.excerpt.length > 0 ? (
                     <div className="cardMarkdownBody" dangerouslySetInnerHTML={{ __html: renderMarkdown(note.excerpt) }} />
                   ) : (
                     <p>No content</p>
                   )}
-                </div>
-                <button type="button" className="button buttonDanger" onClick={() => void deleteTrash(note.id)}>
-                  Delete
                 </button>
+                <div className="cardActions">
+                  <button type="button" className="iconButton" onClick={() => void restoreTrash(note.id)} aria-label="Restore note">
+                    <RotateCcw aria-hidden="true" size={18} />
+                  </button>
+                  <button type="button" className="iconButton" onClick={() => confirmDeleteTrash(note.id)} aria-label="Delete permanently">
+                    <Trash2 aria-hidden="true" size={18} />
+                  </button>
+                </div>
               </article>
             ))}
           </div>
@@ -844,6 +945,9 @@ export function App() {
           onEdit={() => void beginEdit(activeNote)}
           onSave={() => void saveEdit()}
           onTrash={() => void trashActiveNote()}
+          isTrash={activeNoteLocation === "trash"}
+          onRestore={() => void restoreTrash(activeNote.id)}
+          onPermanentDelete={() => confirmDeleteTrash(activeNote.id)}
         />
       )}
 
@@ -900,6 +1004,7 @@ export function App() {
 
   function openLocalEditor(note: Note): void {
     setActiveNote(note);
+    setActiveNoteLocation("notes");
     setEditTitle(note.title);
     setEditTags(note.tags.join(", "));
     setEditBody(note.body);
@@ -943,7 +1048,7 @@ export function App() {
           <button type="button" className="iconButton" onClick={() => void beginEditById(note.id)} aria-label="Edit note">
             <Edit3 aria-hidden="true" size={18} />
           </button>
-          <button type="button" className="iconButton buttonDanger cardTrashButton" onClick={() => void trashNote(note.id, localNotes[note.id])} aria-label="Move note to trash">
+          <button type="button" className="iconButton cardTrashButton" onClick={() => void trashNote(note.id, localNotes[note.id])} aria-label="Move note to trash">
             <Trash2 aria-hidden="true" size={18} />
           </button>
         </div>
@@ -966,6 +1071,9 @@ function NoteModal(props: {
   readonly onEdit: () => void;
   readonly onSave: () => void;
   readonly onTrash: () => void;
+  readonly isTrash?: boolean;
+  readonly onRestore?: () => void;
+  readonly onPermanentDelete?: () => void;
 }) {
   function closeFromBackdrop(event: MouseEvent<HTMLDivElement>): void {
     if (props.mode === "read" && event.target === event.currentTarget) {
@@ -1014,7 +1122,16 @@ function NoteModal(props: {
         )}
 
         <div className="modalActions">
-          {props.mode === "edit" ? (
+          {props.isTrash === true ? (
+            <>
+              <button type="button" className="iconButton" onClick={props.onRestore} aria-label="Restore note">
+                <RotateCcw aria-hidden="true" size={20} />
+              </button>
+              <button type="button" className="iconButton" onClick={props.onPermanentDelete} aria-label="Delete permanently">
+                <Trash2 aria-hidden="true" size={20} />
+              </button>
+            </>
+          ) : props.mode === "edit" ? (
             <button type="button" className="iconButton buttonPrimary" onClick={props.onSave} aria-label="Save note">
               <Check aria-hidden="true" size={20} />
             </button>
@@ -1023,7 +1140,7 @@ function NoteModal(props: {
               <Edit3 aria-hidden="true" size={20} />
             </button>
           )}
-          <button type="button" className="iconButton buttonDanger" onClick={props.onTrash} aria-label="Move note to trash">
+          <button type="button" className="iconButton" onClick={props.onTrash} aria-label="Move note to trash">
             <Trash2 aria-hidden="true" size={20} />
           </button>
         </div>
@@ -1155,6 +1272,7 @@ function createLocalNote(input: { readonly title: string; readonly body: string;
     title: input.title,
     created: now,
     updated: now,
+    deleted: null,
     tags: input.tags,
     pinned: false,
     conflict: false,
@@ -1181,6 +1299,7 @@ function noteToSummary(note: Note): NoteSummary {
     title: note.title,
     created: note.created,
     updated: note.updated,
+    deleted: note.deleted,
     tags: note.tags,
     pinned: note.pinned,
     conflict: note.conflict,
@@ -1252,11 +1371,14 @@ function replaceCurrentTagFragment(value: string, tag: string): string {
   return parts.map((part) => part.trim()).filter((part) => part.length > 0).join(", ");
 }
 
-function buildNoteMarkdown(note: Pick<Note, "title" | "created" | "updated" | "tags" | "pinned" | "conflict" | "saveFailed" | "deleteFailed" | "body">): string {
+function buildNoteMarkdown(
+  note: Pick<Note, "title" | "created" | "updated" | "deleted" | "tags" | "pinned" | "conflict" | "saveFailed" | "deleteFailed" | "body">
+): string {
   const metadata = [
     `title: ${JSON.stringify(note.title)}`,
     `created: ${note.created}`,
     `updated: ${note.updated}`,
+    note.deleted !== null ? `deleted: ${note.deleted}` : null,
     `tags: [${note.tags.map((tag) => JSON.stringify(tag)).join(", ")}]`,
     note.pinned ? "pinned: true" : null,
     note.conflict ? "conflict: true" : null,

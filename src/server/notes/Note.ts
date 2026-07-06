@@ -5,6 +5,7 @@ export interface Note {
   readonly title: string;
   readonly created: string;
   readonly updated: string;
+  readonly deleted: string | null;
   readonly tags: readonly string[];
   readonly pinned: boolean;
   readonly conflict: boolean;
@@ -19,6 +20,7 @@ export interface NoteSummary {
   readonly title: string;
   readonly created: string;
   readonly updated: string;
+  readonly deleted: string | null;
   readonly tags: readonly string[];
   readonly pinned: boolean;
   readonly conflict: boolean;
@@ -34,6 +36,7 @@ export function toNoteSummary(note: Note): NoteSummary {
     title: note.title,
     created: note.created,
     updated: note.updated,
+    deleted: note.deleted,
     tags: note.tags,
     pinned: note.pinned,
     conflict: note.conflict,
