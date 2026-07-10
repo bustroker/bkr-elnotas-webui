@@ -338,17 +338,97 @@ button:disabled {
   padding-bottom: 20px;
 }
 
-.filters input,
-.filters select {
+.filters input {
   border: 1px solid #c7d2e2;
   border-radius: 6px;
   min-height: 40px;
   padding: 8px 10px;
 }
 
-.filters input {
+.searchFilter {
   flex: 1;
   min-width: 180px;
+  position: relative;
+}
+
+.searchFilter input {
+  padding-right: 34px;
+  width: 100%;
+}
+
+.searchClearButton {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #66758a;
+  display: inline-flex;
+  height: 28px;
+  justify-content: center;
+  padding: 0;
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+}
+
+.searchClearButton:hover,
+.searchClearButton:focus-visible {
+  color: #17202f;
+  outline: none;
+}
+
+.searchClearButton:focus-visible {
+  outline: 2px solid #1c4e80;
+  outline-offset: 1px;
+}
+
+.tagFilter {
+  flex: 0 0 170px;
+  position: relative;
+}
+
+.tagFilter input {
+  width: 100%;
+}
+
+.filterDropdown {
+  background: #ffffff;
+  border: 1px solid #c7d2e2;
+  border-radius: 6px;
+  box-shadow: 0 10px 24px rgb(22 31 45 / 16%);
+  display: grid;
+  left: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 35;
+}
+
+.filterDropdown button {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #17202f;
+  justify-content: flex-start;
+  min-height: 34px;
+  padding: 7px 8px;
+  text-align: left;
+}
+
+.filterDropdown button:hover,
+.filterDropdown button:focus-visible,
+.filterDropdown button[aria-selected="true"] {
+  background: #e8eef7;
+}
+
+.filterDropdown p {
+  color: #66758a;
+  margin: 0;
+  padding: 8px;
 }
 
 .cardGroups {
@@ -803,6 +883,12 @@ button:disabled {
   .topActions,
   .sectionHeader div {
     justify-content: flex-end;
+    width: 100%;
+  }
+
+  .tagFilter,
+  .searchFilter {
+    flex: 1 1 auto;
     width: 100%;
   }
 

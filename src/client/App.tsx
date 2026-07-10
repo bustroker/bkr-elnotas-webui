@@ -37,6 +37,7 @@ type ConfirmAction = {
 };
 const statusBarFadeOutMs = 250;
 const cardRemoveAnimationMs = 220;
+const syncFailedMessage = "Could not sync with GitHub. Showing the local copy. Try Reload in a moment.";
 
 interface HelpActionProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   readonly help: string;
@@ -172,15 +173,21 @@ export function App() {
 
   async function initialize(): Promise<void> {
     showWorkingStatus("Loading notes...");
+    let didSyncFail = false;
     try {
-      const didLoad = await runSilently("Could not load session.", async () => {
+      const didLoad = await runSilently("Could not load your session. Reload the page and sign in again if needed.", async () => {
         const currentUser = await getCurrentUser();
         setUser(currentUser);
         if (currentUser.authenticated) {
-          setNotes(await listNotes());
+          const response = await listNotes();
+          setNotes(response.notes);
+          if (response.syncStatus === "sync_failed") {
+            didSyncFail = true;
+            showSyncFailedStatus();
+          }
         }
       });
-      if (didLoad) {
+      if (didLoad && !didSyncFail) {
         hideStatusBar();
       }
     } finally {
@@ -208,8 +215,13 @@ export function App() {
   }
   async function refreshNotes(): Promise<void> {
     await run("Reloading notes", "Reloading notes from GitHub...", async () => {
-      setNotes(await reloadNotes());
-      showSuccessStatus("Notes reloaded from GitHub.");
+      const response = await reloadNotes();
+      setNotes(response.notes);
+      if (response.syncStatus === "sync_failed") {
+        showSyncFailedStatus();
+      } else {
+        showSuccessStatus("Notes reloaded from GitHub.");
+      }
     });
   }
 
@@ -223,7 +235,7 @@ export function App() {
       return;
     }
 
-    await runSilently("Could not open note.", async () => {
+    await runSilently("Could not open the note. Try opening it again.", async () => {
       setActiveNote(await getNote(id));
       setActiveNoteLocation("notes");
       setModalMode("read");
@@ -238,7 +250,7 @@ export function App() {
       return;
     }
 
-    await runSilently("Could not open editor.", async () => {
+    await runSilently("Could not open the editor. Close the note, reopen it, and try Edit again.", async () => {
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
       setActiveNoteLocation("notes");
@@ -257,7 +269,7 @@ export function App() {
       return;
     }
 
-    await runSilently("Could not open editor.", async () => {
+    await runSilently("Could not open the editor. Close the note, reopen it, and try Edit again.", async () => {
       const note = await getNote(id);
       const response = await startEditSession(note.id);
       setActiveNote(response.note);
@@ -406,7 +418,7 @@ export function App() {
 
     try {
       await pinNote(note.id, pinned);
-      setNotes(await listNotes());
+      setNotes((await listNotes()).notes);
     } catch (error) {
       setNotes(previousNotes);
       if (error instanceof ApiRequestError && error.code === "not_authenticated") {
@@ -414,7 +426,7 @@ export function App() {
         return;
       }
 
-      showErrorStatusFrom(error, "Updating pin failed.");
+      showErrorStatusFrom(error, "Failed to update pin. Try pinning the note again.");
     }
   }
 
@@ -468,11 +480,11 @@ export function App() {
   }
 
   async function syncNotesFromBackend(): Promise<void> {
-    setNotes(await listNotes());
+    setNotes((await listNotes()).notes);
   }
 
   async function openTrash(): Promise<void> {
-    await runSilently("Could not load trash.", async () => {
+    await runSilently("Could not load trash. Try opening Trash again.", async () => {
       setTrashNotes(await listTrash());
       setViewMode("trash");
       setActiveNote(null);
@@ -480,7 +492,7 @@ export function App() {
   }
 
   async function openTrashNote(id: string): Promise<void> {
-    await runSilently("Could not open trash note.", async () => {
+    await runSilently("Could not open the trash note. Try opening it again.", async () => {
       setActiveNote(await getTrashNote(id));
       setActiveNoteLocation("trash");
       setModalMode("read");
@@ -662,6 +674,10 @@ export function App() {
     });
   }
 
+  function showSyncFailedStatus(): void {
+    showErrorStatus(syncFailedMessage);
+  }
+
   function showInfoStatus(message: string, autoHideMs = defaultStatusBarAutoHideMs): void {
     setStatusBar({
       tone: "info",
@@ -691,7 +707,7 @@ export function App() {
         return;
       }
 
-      showErrorStatusFrom(error, `${label} failed.`);
+      showErrorStatusFrom(error, `${label} failed. Try again.`);
     } finally {
       setIsBusy(false);
     }
@@ -865,15 +881,15 @@ export function App() {
       {viewMode === "notes" && (
         <>
           <section className="filters">
-            <select value={tagFilter} onChange={(event) => setTagFilter(event.target.value)} aria-label="Tag filter">
-              <option value="">All tags</option>
-              {tags.map((tag) => (
-                <option key={tag} value={tag}>
-                  {tag}
-                </option>
-              ))}
-            </select>
-            <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Search notes" />
+            <TagFilter value={tagFilter} onChange={setTagFilter} tags={tags} />
+            <div className="searchFilter">
+              <input value={textFilter} onChange={(event) => setTextFilter(event.target.value)} placeholder="Search notes" />
+              {textFilter.length > 0 && (
+                <button type="button" className="searchClearButton" onClick={() => setTextFilter("")} aria-label="Clear search text">
+                  <X aria-hidden="true" size={16} />
+                </button>
+              )}
+            </div>
           </section>
 
           {renderStatusBar()}
@@ -1206,6 +1222,77 @@ function HelpAction({ help, helpId, actionClassName, children, openHelpId, onTog
       {isHelpOpen && (
         <div className="helpPopover" role="status">
           {help}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TagFilter(props: {
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+  readonly tags: readonly string[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const filteredTags = props.tags.filter((tag) => tag.toLowerCase().includes(query.trim().toLowerCase()));
+  const inputValue = isOpen ? query : props.value || "";
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target;
+      if (target instanceof Node && wrapperRef.current?.contains(target) === true) {
+        return;
+      }
+
+      setIsOpen(false);
+      setQuery("");
+    };
+
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+    };
+  }, [isOpen]);
+
+  function selectTag(tag: string): void {
+    props.onChange(tag);
+    setQuery("");
+    setIsOpen(false);
+  }
+
+  return (
+    <div className="tagFilter" ref={wrapperRef}>
+      <input
+        value={inputValue}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setIsOpen(true);
+        }}
+        onFocus={() => {
+          setQuery("");
+          setIsOpen(true);
+        }}
+        placeholder="All tags"
+        aria-label="Tag filter"
+        autoComplete="off"
+      />
+      {isOpen && (
+        <div className="filterDropdown" role="listbox">
+          <button type="button" role="option" onClick={() => selectTag("")} aria-selected={props.value === ""}>
+            All tags
+          </button>
+          {filteredTags.map((tag) => (
+            <button key={tag} type="button" role="option" onClick={() => selectTag(tag)} aria-selected={props.value === tag}>
+              {tag}
+            </button>
+          ))}
+          {filteredTags.length === 0 && <p>No matching tags</p>}
         </div>
       )}
     </div>

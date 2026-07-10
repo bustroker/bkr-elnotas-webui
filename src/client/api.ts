@@ -1,4 +1,4 @@
-import type { EditSessionResponse, MutationResult, Note, NoteSummary, UserState } from "./types";
+import type { EditSessionResponse, MutationResult, Note, NotesListResponse, NoteSummary, UserState } from "./types";
 
 export class ApiRequestError extends Error {
   public readonly code: string | null;
@@ -16,14 +16,12 @@ export async function getCurrentUser(): Promise<UserState> {
   return request<UserState>("/api/me");
 }
 
-export async function listNotes(): Promise<readonly NoteSummary[]> {
-  const response = await request<{ readonly notes: readonly NoteSummary[] }>("/api/notes");
-  return response.notes;
+export async function listNotes(): Promise<NotesListResponse> {
+  return request<NotesListResponse>("/api/notes");
 }
 
-export async function reloadNotes(): Promise<readonly NoteSummary[]> {
-  const response = await request<{ readonly notes: readonly NoteSummary[] }>("/api/reload", { method: "POST" });
-  return response.notes;
+export async function reloadNotes(): Promise<NotesListResponse> {
+  return request<NotesListResponse>("/api/reload", { method: "POST" });
 }
 
 export async function resetNotesAccess(): Promise<void> {

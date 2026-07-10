@@ -30,7 +30,7 @@ export function registerAuthRoutes(input: {
     const query = request.query as { code?: string; state?: string };
     const stateCookie = request.cookies[oauthStateCookieName];
     if (query.code === undefined || query.state === undefined || stateCookie !== query.state) {
-      throw new ResultError("invalid_oauth_state", "GitHub OAuth state is invalid.", 401);
+      throw new ResultError("invalid_oauth_state", "GitHub sign-in state is invalid or expired. Start sign-in again.", 401);
     }
 
     const user = await githubOAuth.exchangeCodeForUser({
@@ -39,7 +39,7 @@ export function registerAuthRoutes(input: {
     });
 
     if (!config.allowedGitHubUsernames.includes(user.login)) {
-      throw new ResultError("user_not_allowed", "This GitHub user is not allowed to use this app.", 403);
+      throw new ResultError("user_not_allowed", "This GitHub user is not allowed to use this app. Sign in with an allowed GitHub account.", 403);
     }
 
     const session = sessions.create(user.login);
@@ -68,7 +68,7 @@ export function registerAuthRoutes(input: {
 export function getRequiredUsername(request: FastifyRequest, sessions: AuthSessionStore): string {
   const session = getSessionFromCookie(request, sessions);
   if (session === null) {
-    throw new ResultError("not_authenticated", "Authentication is required.", 401);
+    throw new ResultError("not_authenticated", "Your session expired. Sign in with GitHub again.", 401);
   }
 
   return session.username;

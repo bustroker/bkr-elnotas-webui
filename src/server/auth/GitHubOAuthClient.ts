@@ -36,12 +36,12 @@ export class GitHubOAuthClient {
     });
 
     if (!tokenResponse.ok) {
-      throw new ResultError("github_oauth_failed", "GitHub OAuth token exchange failed.", 502);
+      throw new ResultError("github_oauth_failed", "GitHub sign-in failed while requesting an access token. Try signing in again.", 502);
     }
 
     const tokenPayload = (await tokenResponse.json()) as { access_token?: string; error?: string };
     if (tokenPayload.access_token === undefined) {
-      throw new ResultError("github_oauth_denied", tokenPayload.error ?? "GitHub OAuth did not return a token.", 401);
+      throw new ResultError("github_oauth_denied", `${tokenPayload.error ?? "GitHub did not return a sign-in token."} Try signing in again.`, 401);
     }
 
     const userResponse = await fetch("https://api.github.com/user", {
@@ -53,12 +53,12 @@ export class GitHubOAuthClient {
     });
 
     if (!userResponse.ok) {
-      throw new ResultError("github_user_failed", "GitHub user lookup failed.", 502);
+      throw new ResultError("github_user_failed", "GitHub sign-in failed while loading your user profile. Try signing in again.", 502);
     }
 
     const userPayload = (await userResponse.json()) as { login?: string };
     if (typeof userPayload.login !== "string" || userPayload.login.trim().length === 0) {
-      throw new ResultError("github_user_invalid", "GitHub user response did not include a login.", 502);
+      throw new ResultError("github_user_invalid", "GitHub did not return a username. Try signing in again.", 502);
     }
 
     return { login: userPayload.login };

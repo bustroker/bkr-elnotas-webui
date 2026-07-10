@@ -58,7 +58,7 @@ export async function createApp(input: CreateAppInput): Promise<FastifyInstance>
       return reply.code(404).send({
         error: {
           code: "not_found",
-          message: "API endpoint not found."
+          message: "API endpoint not found. Reload the page and try again."
         }
       });
     }

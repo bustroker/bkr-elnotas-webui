@@ -93,4 +93,21 @@ describe("OctokitGitHubNotesGateway", () => {
 
     await expect(gateway.listMarkdownFiles("notes")).resolves.toEqual([]);
   });
+
+  it("returns an actionable temporary error when GitHub has a server-side failure", async () => {
+    const { OctokitGitHubNotesGateway } = await import("../src/server/github/OctokitGitHubNotesGateway.js");
+    mockRest.repos.getContent.mockRejectedValue({ status: 502, message: "Server Error" });
+    const gateway = new OctokitGitHubNotesGateway(testConfig(), {
+      githubAppClientId: "client-id",
+      githubAppClientSecret: "client-secret",
+      githubAppId: "123",
+      githubAppPrivateKey: "private-key",
+      sessionSecret: "session-secret"
+    });
+
+    await expect(gateway.readMarkdownFile("notes/one.md")).rejects.toMatchObject({
+      code: "github_temporary_error",
+      message: expect.stringContaining("Try Reload in a moment")
+    });
+  });
 });

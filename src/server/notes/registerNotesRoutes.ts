@@ -8,6 +8,7 @@ import { ResultError } from "../shared/ResultError.js";
 import { sessionCookieName } from "../auth/AuthCookies.js";
 import type { Note, NoteSummary } from "./Note.js";
 import type { CreateNoteRequest, NoteMutationResult, PinNoteRequest, UpdateNoteRequest } from "./NoteRequests.js";
+import type { NotesListResult } from "./NotesService.js";
 
 const createNoteSchema = z.object({
   fileName: z.string().trim().regex(/^[a-z0-9][a-z0-9-]*\.md$/).optional(),
@@ -52,7 +53,7 @@ export function registerNotesRoutes(input: {
 
   app.get("/api/notes", async (request) => {
     getRequiredUsername(request, sessions);
-    return { notes: await notes.listNotes() };
+    return notes.loadActiveNotes();
   });
 
   app.get("/api/notes/:id", async (request) => {
@@ -126,13 +127,13 @@ export function registerNotesRoutes(input: {
 
   app.post("/api/reload", async (request) => {
     getRequiredUsername(request, sessions);
-    return { notes: await notes.reloadActiveNotes() };
+    return notes.reloadActiveNotes();
   });
 
   app.post("/api/reset-notes-access", async (request, reply) => {
     const session = getSessionFromCookie(request, sessions);
     if (session === null) {
-      throw new ResultError("not_authenticated", "Authentication is required.", 401);
+      throw new ResultError("not_authenticated", "Your session expired. Sign in with GitHub again.", 401);
     }
 
     await notes.resetLocalAccess();
@@ -143,7 +144,8 @@ export function registerNotesRoutes(input: {
 }
 
 export interface NotesApi {
-  reloadActiveNotes(): Promise<readonly NoteSummary[]>;
+  loadActiveNotes(): Promise<NotesListResult>;
+  reloadActiveNotes(): Promise<NotesListResult>;
   listNotes(): Promise<readonly NoteSummary[]>;
   getNote(id: string): Promise<Note>;
   createNote(request: CreateNoteRequest): Promise<NoteMutationResult>;
@@ -162,7 +164,7 @@ export interface NotesApi {
 function parseBody<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
   if (!result.success) {
-    throw new ResultError("invalid_request", "The request body is invalid.", 400);
+    throw new ResultError("invalid_request", "The request body is invalid. Check the note fields and try again.", 400);
   }
 
   return result.data;
@@ -170,12 +172,12 @@ function parseBody<T>(schema: z.ZodType<T>, value: unknown): T {
 
 function pathParam(params: unknown, name: string): string {
   if (typeof params !== "object" || params === null || Array.isArray(params)) {
-    throw new ResultError("invalid_path", "The request path is invalid.", 400);
+    throw new ResultError("invalid_path", "The request path is invalid. Reload the page and try again.", 400);
   }
 
   const value = (params as Record<string, unknown>)[name];
   if (typeof value !== "string" || value.trim().length === 0) {
-    throw new ResultError("invalid_path", "The request path is invalid.", 400);
+    throw new ResultError("invalid_path", "The request path is invalid. Reload the page and try again.", 400);
   }
 
   return value;

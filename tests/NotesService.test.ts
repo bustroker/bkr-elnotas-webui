@@ -6,6 +6,7 @@ import type { GitHubFileChange, GitHubNotesGateway, RemoteMarkdownFile } from ".
 import { EditSessionStore } from "../src/server/notes/EditSessionStore.js";
 import { NotesService } from "../src/server/notes/NotesService.js";
 import type { Clock } from "../src/server/shared/Clock.js";
+import { ResultError } from "../src/server/shared/ResultError.js";
 import { WorkingCopyRepository } from "../src/server/working-copy/WorkingCopyRepository.js";
 import { testConfig } from "./fixtures.js";
 
@@ -64,7 +65,67 @@ class FailingCommitGateway extends MemoryGateway {
   }
 }
 
+class FailingSyncGateway extends MemoryGateway {
+  public override async listMarkdownFiles(folder: string): Promise<readonly RemoteMarkdownFile[]> {
+    if (folder === "notes") {
+      throw new ResultError(
+        "github_temporary_error",
+        "GitHub had a temporary problem while accessing the notes repository. Try Reload in a moment.",
+        502
+      );
+    }
+
+    return super.listMarkdownFiles(folder);
+  }
+}
+
 describe("NotesService", () => {
+  it("returns local notes with sync_failed when GitHub sync fails", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const workingCopy = new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder);
+    const gateway = new MemoryGateway();
+    gateway.files.set("notes/current.md", {
+      path: "notes/current.md",
+      sha: "sha-current",
+      content: noteMarkdown("Current", "Body")
+    });
+    const loadedService = new NotesService({
+      config,
+      gateway,
+      workingCopy,
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+    await loadedService.reloadActiveNotes();
+
+    const failingService = new NotesService({
+      config,
+      gateway: new FailingSyncGateway(),
+      workingCopy,
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+    const result = await failingService.loadActiveNotes();
+
+    expect(result.syncStatus).toBe("sync_failed");
+    expect(result.notes.map((note) => note.id)).toEqual(["current"]);
+  });
+
+  it("returns an empty local copy with sync_failed when GitHub sync fails before any notes are local", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const service = new NotesService({
+      config,
+      gateway: new FailingSyncGateway(),
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    const result = await service.loadActiveNotes();
+
+    expect(result).toEqual({ notes: [], syncStatus: "sync_failed" });
+  });
+
   it("creates conflict copy and marks original when edit SHA is stale", async () => {
     const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
     const gateway = new MemoryGateway();

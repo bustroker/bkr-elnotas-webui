@@ -5,6 +5,9 @@ import type { AppSecrets } from "../env/AppSecrets.js";
 import { ResultError } from "../shared/ResultError.js";
 import type { GitHubFileChange, GitHubNotesGateway, RemoteMarkdownFile } from "./GitHubNotesGateway.js";
 
+const markdownReadConcurrency = 5;
+const temporaryRetryDelaysMs = [250, 750];
+
 export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
   private readonly config: AppConfig;
   private readonly secrets: AppSecrets;
@@ -22,20 +25,20 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
 
   public async listMarkdownFiles(folder: string): Promise<readonly RemoteMarkdownFile[]> {
     const octokit = await this.createInstallationOctokit();
-    const response = await octokit.rest.repos
-      .getContent({
+    const response = await retryTemporaryGitHubErrors(() =>
+      octokit.rest.repos.getContent({
         owner: this.config.notesGitHubRepository.account,
         repo: this.config.notesGitHubRepository.repo,
         path: folder,
         ref: this.config.notesGitHubRepository.branch
       })
-      .catch((error: unknown) => {
-        if (isGitHubStatus(error, 404)) {
-          return null;
-        }
+    ).catch((error: unknown) => {
+      if (isGitHubStatus(error, 404)) {
+        return null;
+      }
 
-        throw this.toGitHubAccessError(error);
-      });
+      throw this.toGitHubAccessError(error);
+    });
 
     if (response === null) {
       return [];
@@ -51,21 +54,25 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
       (entry) => entry.type === "file" && entry.name.toLowerCase().endsWith(".md")
     );
 
-    return Promise.all(markdownEntries.map((entry) => this.readMarkdownFile(entry.path)));
+    return mapWithConcurrency(markdownEntries, markdownReadConcurrency, (entry) => this.readMarkdownFileWithOctokit(octokit, entry.path));
   }
 
   public async readMarkdownFile(filePath: string): Promise<RemoteMarkdownFile> {
     const octokit = await this.createInstallationOctokit();
-    const response = await octokit.rest.repos
-      .getContent({
+    return this.readMarkdownFileWithOctokit(octokit, filePath);
+  }
+
+  private async readMarkdownFileWithOctokit(octokit: Octokit, filePath: string): Promise<RemoteMarkdownFile> {
+    const response = await retryTemporaryGitHubErrors(() =>
+      octokit.rest.repos.getContent({
         owner: this.config.notesGitHubRepository.account,
         repo: this.config.notesGitHubRepository.repo,
         path: filePath,
         ref: this.config.notesGitHubRepository.branch
       })
-      .catch((error: unknown) => {
-        throw this.toGitHubAccessError(error);
-      });
+    ).catch((error: unknown) => {
+      throw this.toGitHubAccessError(error);
+    });
 
     if (Array.isArray(response.data) || response.data.type !== "file" || response.data.content === undefined) {
       throw new ResultError("github_file_not_found", `GitHub file '${filePath}' was not found.`, 404);
@@ -170,7 +177,7 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
           const repoName = this.notesRepositoryName();
           throw new ResultError(
             "github_app_not_installed",
-            `GitHub App is not installed on '${repoName}', or the installation has not been updated for that repository.`,
+            `GitHub App is not installed on '${repoName}', or the installation has not been updated for that repository. Install or update the GitHub App on the notes repository, then Reload notes.`,
             403
           );
         }
@@ -192,10 +199,18 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
 
     const repoName = this.notesRepositoryName();
     const message = githubErrorMessage(error);
+    if (isGitHubTemporaryError(error)) {
+      return new ResultError(
+        "github_temporary_error",
+        `GitHub had a temporary problem while accessing '${repoName}'. Try Reload in a moment.`,
+        502
+      );
+    }
+
     if (isGitHubStatus(error, 403) && message.includes("Resource not accessible by integration")) {
       return new ResultError(
         "github_app_repo_access_denied",
-        `GitHub App cannot access '${repoName}'. Confirm it is installed on the notes repository, has Contents: Read and write, and the installation permissions were updated.`,
+        `GitHub App cannot access '${repoName}'. Confirm it is installed on the notes repository, has Contents: Read and write, and the installation permissions were updated. Then Reload notes.`,
         403
       );
     }
@@ -225,7 +240,7 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
     const { branch } = this.config.notesGitHubRepository;
     return new ResultError(
       "github_repository_setup_invalid",
-      `${detail} Expected setup: repository '${this.notesRepositoryName()}' exists, branch '${branch}' exists with at least one commit, and the GitHub App has Contents: Read and write access.`,
+      `${detail} Expected setup: repository '${this.notesRepositoryName()}' exists, branch '${branch}' exists with at least one commit, and the GitHub App has Contents: Read and write access. Fix the repository setup, then Reload notes.`,
       409
     );
   }
@@ -238,6 +253,69 @@ export class OctokitGitHubNotesGateway implements GitHubNotesGateway {
 
 function isGitHubStatus(error: unknown, status: number): boolean {
   return typeof error === "object" && error !== null && "status" in error && (error as { readonly status?: unknown }).status === status;
+}
+
+function isGitHubTemporaryError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("status" in error)) {
+    return false;
+  }
+
+  const status = (error as { readonly status?: unknown }).status;
+  return typeof status === "number" && status >= 500 && status <= 599;
+}
+
+async function retryTemporaryGitHubErrors<T>(operation: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      if (!isRetriableGitHubTemporaryError(error) || attempt >= temporaryRetryDelaysMs.length) {
+        throw error;
+      }
+
+      await delay(temporaryRetryDelaysMs[attempt] ?? 0);
+    }
+  }
+}
+
+function isRetriableGitHubTemporaryError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("status" in error)) {
+    return false;
+  }
+
+  const status = (error as { readonly status?: unknown }).status;
+  return status === 502 || status === 503 || status === 504;
+}
+
+async function mapWithConcurrency<TInput, TOutput>(
+  inputs: readonly TInput[],
+  concurrency: number,
+  operation: (input: TInput) => Promise<TOutput>
+): Promise<readonly TOutput[]> {
+  const results = new Array<TOutput>(inputs.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const currentIndex = nextIndex;
+      nextIndex += 1;
+      const input = inputs[currentIndex];
+      if (input === undefined) {
+        return;
+      }
+
+      results[currentIndex] = await operation(input);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, inputs.length) }, () => worker()));
+  return results;
+}
+
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }
 
 function githubErrorMessage(error: unknown): string {

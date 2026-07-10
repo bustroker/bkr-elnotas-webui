@@ -12,6 +12,13 @@ import { sortNotes } from "./sortNotes.js";
 import { EditSessionStore } from "./EditSessionStore.js";
 import type { ConflictResult, CreateNoteRequest, NoteMutationResult, PinNoteRequest, UpdateNoteRequest } from "./NoteRequests.js";
 
+export type NotesSyncStatus = "synced" | "sync_failed";
+
+export interface NotesListResult {
+  readonly notes: readonly NoteSummary[];
+  readonly syncStatus: NotesSyncStatus;
+}
+
 export class NotesService {
   private readonly config: AppConfig;
   private readonly gateway: GitHubNotesGateway;
@@ -19,6 +26,7 @@ export class NotesService {
   private readonly clock: Clock;
   private readonly editSessions: EditSessionStore;
   private loaded = false;
+  private lastSyncStatus: NotesSyncStatus = "synced";
 
   public constructor(input: {
     readonly config: AppConfig;
@@ -34,17 +42,25 @@ export class NotesService {
     this.editSessions = input.editSessions;
   }
 
-  public async reloadActiveNotes(): Promise<readonly NoteSummary[]> {
-    await this.gateway.validateRepositorySetup();
-    const files = await this.gateway.listMarkdownFiles(this.config.notesFolder);
-    await this.workingCopy.replaceAll(files);
-    this.loaded = true;
-    return this.listNotes();
+  public async loadActiveNotes(): Promise<NotesListResult> {
+    const syncStatus = await this.ensureLoaded();
+    return {
+      notes: await this.listLocalNoteSummaries(),
+      syncStatus
+    };
+  }
+
+  public async reloadActiveNotes(): Promise<NotesListResult> {
+    const syncStatus = await this.syncFromGitHub();
+    return {
+      notes: await this.listLocalNoteSummaries(),
+      syncStatus
+    };
   }
 
   public async listNotes(): Promise<readonly NoteSummary[]> {
     await this.ensureLoaded();
-    return sortNotes((await this.workingCopy.listNotes()).map(toNoteSummary));
+    return this.listLocalNoteSummaries();
   }
 
   public async getNote(id: string): Promise<Note> {
@@ -111,7 +127,7 @@ export class NotesService {
   public async updateNote(id: string, request: UpdateNoteRequest): Promise<NoteMutationResult> {
     const editSession = this.editSessions.consume(request.editSessionId);
     if (editSession === null || editSession.noteId !== id) {
-      throw new ResultError("invalid_edit_session", "The edit session is missing or invalid.", 409);
+      throw new ResultError("invalid_edit_session", "The edit session is missing or invalid. Close the note, reopen it, and save again.", 409);
     }
 
     if (editSession.sha !== null) {
@@ -315,7 +331,7 @@ export class NotesService {
     const files = await this.gateway.listMarkdownFiles(this.config.trashFolder);
     const file = files.find((candidate) => candidate.path.split("/").at(-1)?.replace(/\.md$/i, "") === id);
     if (file === undefined) {
-      throw new ResultError("trash_note_not_found", `Trash note '${id}' was not found.`, 404);
+      throw new ResultError("trash_note_not_found", `Trash note '${id}' was not found. Reload trash and try again.`, 404);
     }
 
     return file;
@@ -350,10 +366,36 @@ export class NotesService {
     return note.deleted ?? note.updated;
   }
 
-  private async ensureLoaded(): Promise<void> {
-    if (!this.loaded) {
-      await this.reloadActiveNotes();
+  private async syncFromGitHub(): Promise<NotesSyncStatus> {
+    try {
+      await this.gateway.validateRepositorySetup();
+      const files = await this.gateway.listMarkdownFiles(this.config.notesFolder);
+      await this.workingCopy.replaceAll(files);
+      this.loaded = true;
+      this.lastSyncStatus = "synced";
+      return "synced";
+    } catch (error) {
+      if (!isRecoverableSyncError(error)) {
+        throw error;
+      }
+
+      console.error("Could not sync notes from GitHub. Showing local working copy.", error);
+      this.loaded = true;
+      this.lastSyncStatus = "sync_failed";
+      return "sync_failed";
     }
+  }
+
+  private async listLocalNoteSummaries(): Promise<readonly NoteSummary[]> {
+    return sortNotes((await this.workingCopy.listNotes()).map(toNoteSummary));
+  }
+
+  private async ensureLoaded(): Promise<NotesSyncStatus> {
+    if (!this.loaded) {
+      return this.syncFromGitHub();
+    }
+
+    return this.lastSyncStatus;
   }
 
   private activePath(fileName: string): string {
@@ -363,4 +405,8 @@ export class NotesService {
   private trashPath(fileName: string): string {
     return `${this.config.trashFolder}/${fileName}`;
   }
+}
+
+function isRecoverableSyncError(error: unknown): boolean {
+  return error instanceof ResultError && error.code === "github_temporary_error";
 }

@@ -16,7 +16,7 @@ export function registerErrorHandler(app: FastifyInstance): void {
     return reply.code(500).send({
       error: {
         code: "internal_server_error",
-        message: "An unexpected error occurred."
+        message: "Something went wrong. Reload the page. If it happens again, check the app logs."
       }
     });
   });

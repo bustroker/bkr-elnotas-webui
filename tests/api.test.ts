@@ -126,7 +126,10 @@ function fakeNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
 
   return {
     async reloadActiveNotes() {
-      return [note];
+      return { notes: [note], syncStatus: "synced" };
+    },
+    async loadActiveNotes() {
+      return { notes: [note], syncStatus: "synced" };
     },
     async listNotes() {
       return [note];

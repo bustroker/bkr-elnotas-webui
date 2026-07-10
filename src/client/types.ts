@@ -32,6 +32,13 @@ export interface Note extends NoteSummary {
   readonly markdown: string;
 }
 
+export type NotesSyncStatus = "synced" | "sync_failed";
+
+export interface NotesListResponse {
+  readonly notes: readonly NoteSummary[];
+  readonly syncStatus: NotesSyncStatus;
+}
+
 export interface EditSessionResponse {
   readonly note: Note;
   readonly editSessionId: string;
