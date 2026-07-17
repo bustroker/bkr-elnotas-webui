@@ -2,6 +2,22 @@ import { describe, expect, it } from "vitest";
 import { parseNoteMarkdown, serializeNoteMarkdown } from "../src/server/notes/NoteMarkdown.js";
 
 describe("NoteMarkdown", () => {
+  it("normalizes tags to lowercase when serializing", () => {
+    const markdown = serializeNoteMarkdown(
+      {
+        title: "Title",
+        created: "2026-06-22T10:00:00.000Z",
+        updated: "2026-06-22T10:00:00.000Z",
+        tags: ["Ropa", "ropa", "Ideas"]
+      },
+      "Body"
+    );
+
+    expect(markdown).toContain("tags:\n  - ideas\n  - ropa");
+    expect(markdown).not.toContain("Ropa");
+    expect(markdown).not.toContain("Ideas");
+  });
+
   it("omits optional status metadata when they do not apply", () => {
     const markdown = serializeNoteMarkdown(
       {
@@ -46,5 +62,25 @@ Body`
     expect(note.deleteFailed).toBe(true);
     expect(note.tags).toEqual(["a"]);
     expect(note.created).toBe("2026-06-22T10:00:00.000Z");
+  });
+
+  it("normalizes tags to lowercase when parsing", () => {
+    const note = parseNoteMarkdown(
+      "notes/example.md",
+      `---
+title: Example
+created: 2026-06-22T10:00:00.000Z
+updated: 2026-06-22T10:00:00.000Z
+tags:
+  - Ropa
+  - ropa
+  - Ideas
+---
+
+Body`
+    );
+
+    expect(note.tags).toEqual(["ideas", "ropa"]);
+    expect(note.markdown).toContain("tags:\n  - ideas\n  - ropa");
   });
 });

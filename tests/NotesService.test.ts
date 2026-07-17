@@ -155,9 +155,46 @@ describe("NotesService", () => {
     });
 
     expect(result.conflict?.originalNoteId).toBe("original");
-    expect([...gateway.files.keys()].some((key) => key.includes("-conflict-"))).toBe(true);
+    expect(gateway.files.has("notes/original-2.md")).toBe(true);
     expect(gateway.files.get("notes/original.md")?.content).toContain("conflict: true");
     expect(gateway.files.get("notes/original.md")?.content).toContain("Remote changed");
+  });
+
+  it("uses the next available indexed file name for conflict copies", async () => {
+    const config = testConfig({ localWorkingCopyFolder: await mkdtemp(path.join(tmpdir(), "elnotas-notes-")) });
+    const gateway = new MemoryGateway();
+    gateway.files.set("notes/original.md", {
+      path: "notes/original.md",
+      sha: "sha-1",
+      content: noteMarkdown("Original", "Initial")
+    });
+    gateway.files.set("notes/original-2.md", {
+      path: "notes/original-2.md",
+      sha: "sha-existing",
+      content: noteMarkdown("Original 2", "Existing")
+    });
+    const service = new NotesService({
+      config,
+      gateway,
+      workingCopy: new WorkingCopyRepository(config.localWorkingCopyFolder, config.notesFolder),
+      clock: new FixedClock(),
+      editSessions: new EditSessionStore()
+    });
+
+    await service.reloadActiveNotes();
+    const edit = await service.startEditSession("original");
+    gateway.files.set("notes/original.md", {
+      path: "notes/original.md",
+      sha: "sha-2",
+      content: noteMarkdown("Original", "Remote changed")
+    });
+    await service.updateNote("original", {
+      editSessionId: edit.editSessionId,
+      markdown: noteMarkdown("Original", "Local changed")
+    });
+
+    expect(gateway.files.get("notes/original-2.md")?.content).toContain("Existing");
+    expect(gateway.files.get("notes/original-3.md")?.content).toContain("Local changed");
   });
 
   it("moves notes to trash without renaming and records the deleted timestamp", async () => {

@@ -435,8 +435,16 @@ export function App() {
       return;
     }
 
-    void trashNote(activeNote.id, activeNote);
-    setActiveNote(null);
+    confirmTrashNote(activeNote.id, activeNote);
+  }
+
+  function confirmTrashNote(id: string, fullNote?: Note): void {
+    setConfirmAction({
+      title: "Move note to trash?",
+      message: "This moves the note to Trash. You can restore it later from the Trash view.",
+      confirmLabel: "Move to Trash",
+      onConfirm: () => trashNote(id, fullNote)
+    });
   }
 
   async function trashNote(id: string, fullNote?: Note): Promise<void> {
@@ -1079,7 +1087,7 @@ export function App() {
           <button type="button" className="iconButton" onClick={() => void beginEditById(note.id)} aria-label="Edit note">
             <Edit3 aria-hidden="true" size={18} />
           </button>
-          <button type="button" className="iconButton cardTrashButton" onClick={() => void trashNote(note.id, localNotes[note.id])} aria-label="Move note to trash">
+          <button type="button" className="iconButton cardTrashButton" onClick={() => confirmTrashNote(note.id, localNotes[note.id])} aria-label="Move note to trash">
             <Trash2 aria-hidden="true" size={18} />
           </button>
         </div>
@@ -1457,10 +1465,10 @@ function hasAttentionStatus(note: Pick<NoteSummary, "saveFailed" | "deleteFailed
 }
 
 function parseTags(value: string): readonly string[] {
-  return value
+  return [...new Set(value
     .split(",")
-    .map((tag) => tag.trim())
-    .filter((tag) => tag.length > 0);
+    .map((tag) => tag.trim().toLowerCase())
+    .filter((tag) => tag.length > 0))];
 }
 
 function currentTagFragment(value: string): string {

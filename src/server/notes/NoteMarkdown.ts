@@ -37,11 +37,12 @@ export function parseNoteMarkdown(path: string, markdown: string): Note {
 }
 
 export function serializeNoteMarkdown(metadata: NoteMetadata, body: string): string {
+  const normalizedTags = normalizeTags(metadata.tags);
   const data: Record<string, unknown> = {
     title: metadata.title,
     created: metadata.created,
     updated: metadata.updated,
-    tags: metadata.tags
+    tags: normalizedTags
   };
 
   if (metadata.pinned === true) {
@@ -120,7 +121,7 @@ function readTags(value: unknown): readonly string[] {
 }
 
 function normalizeTags(tags: readonly string[]): readonly string[] {
-  return [...new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0))].sort((left, right) =>
+  return [...new Set(tags.map((tag) => tag.trim().toLowerCase()).filter((tag) => tag.length > 0))].sort((left, right) =>
     left.localeCompare(right)
   );
 }

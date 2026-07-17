@@ -283,8 +283,7 @@ export class NotesService {
       updated: this.clock.now().toISOString(),
       conflict: true
     }));
-    const originalFileName = path.basename(originalPath, ".md");
-    const conflictFileName = `${originalFileName}-conflict-${timestampSlug(this.clock.now())}.md`;
+    const conflictFileName = await this.availableFileNameInFolder(this.config.notesFolder, path.basename(originalPath));
     const conflictPath = this.activePath(conflictFileName);
     const originalNote = parseNoteMarkdown(originalPath, currentOriginalMarkdown);
     const conflictNote = parseNoteMarkdown(conflictPath, conflictCopyMarkdown);
