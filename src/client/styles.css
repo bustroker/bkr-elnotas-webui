@@ -716,6 +716,10 @@ button:disabled {
   z-index: 100;
 }
 
+.confirmBackdrop {
+  z-index: 110;
+}
+
 .noteModal {
   display: flex;
   flex-direction: column;

@@ -856,7 +856,7 @@ export function App() {
       </header>
 
       {confirmAction !== null && (
-        <div className="modalBackdrop">
+        <div className="modalBackdrop confirmBackdrop">
           <section className="confirmModal">
             <div className="modalHeader">
               <h2>{confirmAction.title}</h2>
